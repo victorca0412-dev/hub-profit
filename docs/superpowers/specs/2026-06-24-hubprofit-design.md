@@ -1,7 +1,9 @@
-# Amazon Hub Delivery Profit Tracker — Design Spec
+# HubProfit — Amazon Hub Delivery Profit Tracker — Design Spec
 
+**App name:** HubProfit
 **Date:** 2026-06-24
 **Owner:** Victor / JVC Vending Services LLC
+**Project folder:** `C:\Users\Victor\hub-profit`
 **Status:** Approved design, pending implementation plan
 
 ## 1. Problem & Goal
@@ -54,6 +56,17 @@ This is **not** a multi-tenant SaaS. Each deployment serves one business.
 - **Persistence:** named Docker volume holds the SQLite file so data survives
   redeploys. (Lesson from prior projects: never wipe named volumes on redeploy.)
 
+### Distribution (public GitHub)
+HubProfit is intended to be released as a **public GitHub repo** so other Hub
+owners can clone/download and run it free. Requirements for a safe public
+release:
+- **MIT license.**
+- **README** with what it is, screenshots, one-command install
+  (`docker compose up`), and how to set rate/vehicle/expenses.
+- **No secrets committed** — all config lives in the app DB/UI; `.gitignore`
+  excludes the SQLite DB and `.superpowers/` brainstorm files.
+- **`.env.example`** only if env config is ever introduced (no real values).
+
 ### Deployment shape
 ```
 /                FastAPI app (Jinja templates + static assets)
@@ -85,9 +98,12 @@ docker-compose.yml + Dockerfile
   `mode` (per_mile | monthly | per_day), `amount`. Drives which costs subtract
   and how they are allocated.
 - **daily_entries**: `id`, `date`, `driver_id` (nullable),
-  `packages`, `miles`, `hours` (nullable), `extra_expense` (nullable),
-  `note`. Stored as raw inputs; money is **computed**, not stored, so changing a
-  rate/setting recalculates history consistently.
+  `packages`, `miles`, `hours` (nullable), `extra_expense` (nullable), `note`,
+  **plus a frozen rate snapshot saved at entry time**:
+  `snap_pay_per_package`, `snap_gas_price`, `snap_mpg`,
+  `snap_expense_config` (JSON of which expenses were enabled + their amounts/modes).
+  An entry's money is always computed from **its own snapshot**, so changing
+  Settings never alters past days. (See §9.)
 - **drivers**: `id`, `name`, `active`. Present in schema from day one; UI hidden
   until `drivers_enabled` is on (future-proofing the "add a driver later" need).
 
@@ -123,6 +139,12 @@ App auto-calculates and shows live before saving:
 All expense toggles default to a sensible state but are fully owner-configurable
 so each Hub owner models only the costs that apply to them.
 
+**Rate-change warning:** when the owner changes a rate-sensitive setting
+(pay per package, gas price, MPG, or any expense amount/toggle), show a
+confirmation: *"This applies to future entries only. Days already logged keep
+the rate and costs they were saved with."* Saving a daily entry locks that day's
+snapshot; the owner is never silently rewriting their history.
+
 ## 9. Calculations
 
 - **Earnings (day):** `packages × pay_per_package`.
@@ -139,11 +161,12 @@ so each Hub owner models only the costs that apply to them.
 - **Effective $/hr (day):** `net_profit ÷ hours` when hours present.
 - **Period totals:** sums of the above across Week / Month / Year / All.
 
-Money values are **derived at read time** from stored raw inputs + current
-settings, so editing a rate or toggle correctly updates historical views.
-(Trade-off noted: if an owner changes their rate mid-history, past nets shift to
-the new rate. Acceptable for v1; a future enhancement could snapshot the rate
-per entry.)
+Money values are **derived from each entry's frozen snapshot** (§6), not from
+current Settings. Saving a day captures the pay rate, gas price, MPG, and
+expense config in effect at that moment. Changing Settings later affects only
+**future** entries — historical days never change. If the owner explicitly edits
+an old entry, they may optionally refresh that single day's snapshot to current
+settings; otherwise it keeps its original values.
 
 ## 10. External Integration
 
@@ -161,8 +184,6 @@ per entry.)
   update the gas price. Off by default; never required.
 - **Driver expansion:** per-driver profit views, driver pay rules. Schema is
   already in place; only UI/reporting work remains.
-- **Per-entry rate snapshot** so historical nets are immune to later rate
-  changes.
 - **Tax/income export** (yearly P&L PDF) — useful since funds flow through the
   business checking account.
 
