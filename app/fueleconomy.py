@@ -33,10 +33,16 @@ def combined_mpg_from_options(year, make, model):
     items = _as_list(data.get("menuItem"))
     if not items:
         return None
-    vehicle_id = items[0]["value"]
+    try:
+        vehicle_id = int(items[0]["value"])  # also guards URL path safety
+    except (ValueError, TypeError, KeyError):
+        return None
     detail = _get(f"{BASE}/vehicle/{vehicle_id}")
     comb = detail.get("comb08")
-    return float(comb) if comb not in (None, "") else None
+    try:
+        return float(comb)
+    except (ValueError, TypeError):
+        return None  # EPA returns non-numeric (e.g. EV records, "N/A")
 
 
 def _as_list(value):
@@ -54,7 +60,10 @@ def cached_mpg(conn, year, make, model):
     if row:
         return json.loads(row["payload"])
     mpg = combined_mpg_from_options(year, make, model)
-    conn.execute("INSERT OR REPLACE INTO mpg_cache (cache_key, payload) "
-                 "VALUES (?, ?)", (key, json.dumps(mpg)))
-    conn.commit()
+    # Only cache a real result. Caching None would permanently poison the
+    # lookup if the EPA API was momentarily empty or failing.
+    if mpg is not None:
+        conn.execute("INSERT OR REPLACE INTO mpg_cache (cache_key, payload) "
+                     "VALUES (?, ?)", (key, json.dumps(mpg)))
+        conn.commit()
     return mpg
