@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>History</h1>
+<table><tbody>
+{% for r in rows %}
+<tr><td>{{ r.date }}</td><td>{{ r.packages }}</td>
+<td>{{ '%.2f'|format(r.computed.net) }}</td>
+<td><form method="post" action="/history/delete/{{ r.id }}">
+<button>Delete</button></form></td></tr>
+{% endfor %}
+</tbody></table>
+{% endblock %}

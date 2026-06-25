@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Log Day</h1>
+<form method="post" action="/log">
+  <input name="date" value="{{ today }}">
+  <input name="packages" placeholder="packages">
+  <input name="miles" placeholder="miles">
+  {% if settings.track_hours %}<input name="hours" placeholder="hours">{% endif %}
+  <input name="extra_expense" placeholder="extra expense">
+  {% if settings.drivers_enabled %}
+  <select name="driver_id">
+    <option value="">Me</option>
+    {% for d in drivers %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <button type="submit">Save day</button>
+</form>
+{% endblock %}

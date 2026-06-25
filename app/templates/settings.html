@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Settings</h1>
+<p>Business: {{ settings.business_name }}</p>
+<form method="post" action="/settings">
+  <input name="business_name" value="{{ settings.business_name }}">
+  <input name="pay_per_package" value="{{ settings.pay_per_package }}">
+  <input name="gas_price_per_gal" value="{{ settings.gas_price_per_gal }}">
+  <input name="vehicle_year" value="{{ settings.vehicle_year }}">
+  <input name="vehicle_make" value="{{ settings.vehicle_make }}">
+  <input name="vehicle_model" value="{{ settings.vehicle_model }}">
+  <input name="vehicle_mpg" value="{{ settings.vehicle_mpg }}">
+  <label><input type="checkbox" name="track_hours" {{ 'checked' if settings.track_hours }}> Track hours</label>
+  <label><input type="checkbox" name="drivers_enabled" {{ 'checked' if settings.drivers_enabled }}> Enable drivers</label>
+  {% for key, c in expense_config.items() %}
+  <label><input type="checkbox" name="exp_{{ key }}_enabled" {{ 'checked' if c.enabled }}> {{ key }}</label>
+  <input name="exp_{{ key }}_amount" value="{{ c.amount }}">
+  {% endfor %}
+  <button type="submit">Save settings</button>
+</form>
+{% endblock %}
