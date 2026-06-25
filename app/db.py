@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS expense_config (
     key TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL DEFAULT 0,
-    mode TEXT NOT NULL,
+    mode TEXT NOT NULL CHECK (mode IN ('mileage_fuel', 'per_mile', 'monthly', 'per_day')),
     amount REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS drivers (
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS drivers (
 CREATE TABLE IF NOT EXISTS daily_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
-    driver_id INTEGER,
+    driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL,
     packages INTEGER NOT NULL,
     miles REAL NOT NULL DEFAULT 0,
     hours REAL,
@@ -64,12 +64,14 @@ def get_conn(db_path: str) -> sqlite3.Connection:
 
 def init_db(db_path: str) -> None:
     conn = get_conn(db_path)
-    conn.executescript(SCHEMA)
-    if conn.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0:
-        conn.execute("INSERT INTO settings (id) VALUES (1)")
-    for key, enabled, mode, amount in DEFAULT_EXPENSES:
-        conn.execute(
-            "INSERT OR IGNORE INTO expense_config (key, enabled, mode, amount) "
-            "VALUES (?, ?, ?, ?)", (key, enabled, mode, amount))
-    conn.commit()
-    conn.close()
+    try:
+        conn.executescript(SCHEMA)
+        with conn:  # explicit transaction: seed commits atomically or rolls back
+            if conn.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0:
+                conn.execute("INSERT INTO settings (id) VALUES (1)")
+            for key, enabled, mode, amount in DEFAULT_EXPENSES:
+                conn.execute(
+                    "INSERT OR IGNORE INTO expense_config (key, enabled, mode, amount) "
+                    "VALUES (?, ?, ?, ?)", (key, enabled, mode, amount))
+    finally:
+        conn.close()
