@@ -11,6 +11,7 @@ def test_create_entry_snapshots_current_settings(conn):
                               "miles": 38.0, "hours": 2.5})
     e = get_entry(conn, eid)
     assert e["snap_pay_per_package"] == 1.65
+    assert e["snap_gas_price"] == 3.40
     assert e["snap_mpg"] == 28.0
     assert e["snap_expense_config"]["insurance"]["amount"] == 140.0
 

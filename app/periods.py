@@ -29,9 +29,11 @@ def days_worked_in_month(entries, year_month):
 
 def aggregate(entries):
     month_days = {}
+    date_counts = defaultdict(int)
     for e in entries:
         ym = e["date"][:7]
         month_days.setdefault(ym, set()).add(e["date"])
+        date_counts[e["date"]] += 1
 
     by_day = []
     totals = defaultdict(float)
@@ -40,7 +42,7 @@ def aggregate(entries):
     for e in sorted(entries, key=lambda x: x["date"]):
         ym = e["date"][:7]
         dwim = len(month_days[ym])
-        r = compute_entry(e, dwim)
+        r = compute_entry(e, dwim, entries_on_date=date_counts[e["date"]])
         by_day.append({"date": e["date"], "net": r["net"],
                        "earnings": r["earnings"],
                        "expenses": r["total_expenses"],

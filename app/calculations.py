@@ -7,7 +7,7 @@ snap_expense_config (a dict keyed by expense name).
 """
 
 
-def _expense_cost(key, cfg, entry, days_worked_in_month):
+def _expense_cost(key, cfg, entry, days_worked_in_month, entries_on_date):
     mode = cfg["mode"]
     amount = cfg["amount"]
     miles = entry["miles"]
@@ -19,8 +19,13 @@ def _expense_cost(key, cfg, entry, days_worked_in_month):
     if mode == "per_mile":
         return miles * amount
     if mode == "monthly":
+        # A monthly fixed cost is spread across the distinct work days in the
+        # month. When several entries share one date (e.g. multiple drivers),
+        # that day's single share is split evenly among them so the date is
+        # never charged more than once.
         days = days_worked_in_month if days_worked_in_month > 0 else 1
-        return amount / days
+        per_entry = entries_on_date if entries_on_date > 0 else 1
+        return amount / days / per_entry
     if mode == "per_day":
         if key == "driver" and entry.get("driver_id") is None:
             return None  # driver pay only applies on driver-assigned days
@@ -28,13 +33,14 @@ def _expense_cost(key, cfg, entry, days_worked_in_month):
     return 0.0
 
 
-def compute_entry(entry, days_worked_in_month):
+def compute_entry(entry, days_worked_in_month, entries_on_date=1):
     earnings = entry["packages"] * entry["snap_pay_per_package"]
     expenses = {}
     for key, cfg in entry["snap_expense_config"].items():
         if not cfg.get("enabled"):
             continue
-        cost = _expense_cost(key, cfg, entry, days_worked_in_month)
+        cost = _expense_cost(key, cfg, entry, days_worked_in_month,
+                             entries_on_date)
         if cost is None:
             continue
         expenses[key] = cost

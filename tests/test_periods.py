@@ -46,3 +46,12 @@ def test_aggregate_totals_and_chart():
     assert len(agg["by_day"]) == 2
     assert agg["by_day"][0]["date"] == "2026-06-22"
     assert "net" in agg["by_day"][0]
+
+
+def test_monthly_cost_not_double_counted_for_same_date():
+    # Two entries on the SAME date: insurance ($140/mo) is a single date's
+    # share split between them, so the month's total insurance is counted once.
+    entries = [make_entry("2026-06-01", 10), make_entry("2026-06-01", 20)]
+    agg = aggregate(entries)
+    # one distinct workday -> full $140 share for that day, counted once total
+    assert round(agg["total_expenses"], 2) == 140.00

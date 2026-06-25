@@ -32,6 +32,8 @@ def get_expense_config(conn):
 
 
 def update_expense_config(conn, key, enabled=None, amount=None):
+    if enabled is None and amount is None:
+        return
     if enabled is not None:
         conn.execute("UPDATE expense_config SET enabled=? WHERE key=?",
                      (1 if enabled else 0, key))

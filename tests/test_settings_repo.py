@@ -29,3 +29,10 @@ def test_update_expense_config(conn):
     cfg = get_expense_config(conn)
     assert cfg["insurance"]["enabled"] is True
     assert cfg["insurance"]["amount"] == 140.0
+
+
+def test_update_settings_ignores_unknown_keys(conn):
+    update_settings(conn, {"pay_per_package": 1.80, "malicious_col": "evil"})
+    s = get_settings(conn)
+    assert s["pay_per_package"] == 1.80
+    assert "malicious_col" not in s

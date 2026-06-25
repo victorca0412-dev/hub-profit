@@ -13,3 +13,11 @@ def test_deactivate_driver(conn):
     set_driver_active(conn, did, False)
     active = [d["name"] for d in list_drivers(conn, only_active=True)]
     assert "Temp" not in active
+
+
+def test_reactivate_driver(conn):
+    did = add_driver(conn, "Temp")
+    set_driver_active(conn, did, False)
+    set_driver_active(conn, did, True)
+    active = [d["name"] for d in list_drivers(conn, only_active=True)]
+    assert "Temp" in active
