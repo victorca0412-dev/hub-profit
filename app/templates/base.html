@@ -1,14 +1,27 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>HubProfit</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/static/app.css"></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HubProfit</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
 <body>
-<nav class="tabs">
-  <a href="/" class="{{ 'on' if active=='dashboard' }}">Dashboard</a>
-  <a href="/log" class="{{ 'on' if active=='log' }}">Log Day</a>
-  <a href="/history" class="{{ 'on' if active=='history' }}">History</a>
-  <a href="/settings" class="{{ 'on' if active=='settings' }}">Settings</a>
-  <a href="/help" class="{{ 'on' if active=='help' }}">Help/FAQ</a>
-</nav>
-<main>{% block content %}{% endblock %}</main>
-</body></html>
+<header class="site-header">
+  <span class="brand">HubProfit</span>
+  <nav class="tabs">
+    <a href="/" class="{{ 'on' if active=='dashboard' else '' }}">Dashboard</a>
+    <a href="/log" class="{{ 'on' if active=='log' else '' }}">Log Day</a>
+    <a href="/history" class="{{ 'on' if active=='history' else '' }}">History</a>
+    <a href="/settings" class="{{ 'on' if active=='settings' else '' }}">Settings</a>
+    <a href="/help" class="{{ 'on' if active=='help' else '' }}">Help/FAQ</a>
+  </nav>
+</header>
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

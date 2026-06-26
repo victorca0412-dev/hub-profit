@@ -1,12 +1,69 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h1>History</h1>
-<table><tbody>
-{% for r in rows %}
-<tr><td>{{ r.date }}</td><td>{{ r.packages }}</td>
-<td>{{ '%.2f'|format(r.computed.net) }}</td>
-<td><form method="post" action="/history/delete/{{ r.id }}">
-<button>Delete</button></form></td></tr>
-{% endfor %}
-</tbody></table>
+<div class="history-header">
+  <h1 class="page-title" style="margin-bottom:0">History</h1>
+  <a class="csv-link" href="/history.csv?period={{ period }}">&#x21A7; Download CSV</a>
+</div>
+
+{# Period filter #}
+<div class="history-filters period-switcher">
+  {% for p in [("week","Week"),("month","Month"),("year","Year"),("all","All")] %}
+  <a href="/history?period={{ p[0] }}"
+     class="{{ 'active-period' if period == p[0] else '' }}">{{ p[1] }}</a>
+  {% endfor %}
+</div>
+
+{% if rows %}
+<div class="card" style="padding: 0; overflow: hidden;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th class="text-right">Pkgs</th>
+        <th class="text-right">Miles</th>
+        <th class="text-right">Earnings</th>
+        <th class="text-right">Expenses</th>
+        <th class="text-right">Net</th>
+        <th class="text-right">$/Hr</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.date }}</td>
+        <td class="text-right">{{ r.packages }}</td>
+        <td class="text-right">{{ "%.1f" | format(r.miles) }}</td>
+        <td class="text-right">${{ "%.2f" | format(r.computed.earnings) }}</td>
+        <td class="text-right text-red">${{ "%.2f" | format(r.computed.total_expenses) }}</td>
+        <td class="text-right {% if r.computed.net >= 0 %}text-green{% else %}text-red{% endif %}">
+          ${{ "%.2f" | format(r.computed.net) }}
+        </td>
+        <td class="text-right text-muted">
+          {% if r.computed.hourly is not none %}
+            ${{ "%.2f" | format(r.computed.hourly) }}
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+        <td>
+          <form method="post" action="/history/delete/{{ r.id }}" class="delete-day-form">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <p class="empty-state">No entries for this period. <a href="/log">Log a day</a> to get started.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
 {% endblock %}

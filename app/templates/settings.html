@@ -1,21 +1,135 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h1>Settings</h1>
-<p>Business: {{ settings.business_name }}</p>
-<form method="post" action="/settings">
-  <input name="business_name" value="{{ settings.business_name }}">
-  <input name="pay_per_package" value="{{ settings.pay_per_package }}">
-  <input name="gas_price_per_gal" value="{{ settings.gas_price_per_gal }}">
-  <input name="vehicle_year" value="{{ settings.vehicle_year }}">
-  <input name="vehicle_make" value="{{ settings.vehicle_make }}">
-  <input name="vehicle_model" value="{{ settings.vehicle_model }}">
-  <input name="vehicle_mpg" value="{{ settings.vehicle_mpg }}">
-  <label><input type="checkbox" name="track_hours" {{ 'checked' if settings.track_hours }}> Track hours</label>
-  <label><input type="checkbox" name="drivers_enabled" {{ 'checked' if settings.drivers_enabled }}> Enable drivers</label>
-  {% for key, c in expense_config.items() %}
-  <label><input type="checkbox" name="exp_{{ key }}_enabled" {{ 'checked' if c.enabled }}> {{ key }}</label>
-  <input name="exp_{{ key }}_amount" value="{{ c.amount }}">
-  {% endfor %}
-  <button type="submit">Save settings</button>
+<h1 class="page-title">Settings</h1>
+
+<form method="post" action="/settings" id="settings-form">
+
+  {# ── Pay & Earnings ── #}
+  <div class="card settings-section">
+    <div class="settings-section-title">Pay &amp; Earnings</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="business_name">Business name</label>
+        <input type="text" id="business_name" name="business_name"
+               value="{{ settings.business_name }}" placeholder="e.g. JVC Vending Services LLC">
+      </div>
+      <div class="field">
+        <label for="pay_per_package">Pay per package ($)</label>
+        <input type="number" id="pay_per_package" name="pay_per_package"
+               value="{{ settings.pay_per_package }}" min="0" step="0.01" placeholder="1.65">
+      </div>
+    </div>
+  </div>
+
+  {# ── Vehicle & Fuel ── #}
+  <div class="card settings-section">
+    <div class="settings-section-title">Vehicle &amp; Fuel</div>
+
+    <div class="vehicle-row">
+      <div class="field">
+        <label for="vehicle_year">Year</label>
+        {# Populated by app.js; data-saved lets JS pre-select the right option #}
+        <select id="vehicle_year" name="vehicle_year"
+                data-saved="{{ settings.vehicle_year }}">
+          <option value="">Select year</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="vehicle_make">Make</label>
+        <select id="vehicle_make" name="vehicle_make"
+                data-saved="{{ settings.vehicle_make }}" disabled>
+          <option value="">Select make</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="vehicle_model">Model</label>
+        <select id="vehicle_model" name="vehicle_model"
+                data-saved="{{ settings.vehicle_model }}" disabled>
+          <option value="">Select model</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mpg-row">
+      <div class="field">
+        <label for="vehicle_mpg">Fuel economy (MPG)</label>
+        <input type="number" id="vehicle_mpg" name="vehicle_mpg"
+               value="{{ settings.vehicle_mpg }}" min="0" step="0.1"
+               placeholder="e.g. 28.0">
+      </div>
+      <button type="button" id="mpg-lookup-btn" class="btn btn-ghost">Look up MPG</button>
+    </div>
+
+    <div class="field">
+      <label for="gas_price_per_gal">Gas price per gallon ($)</label>
+      <input type="number" id="gas_price_per_gal" name="gas_price_per_gal"
+             value="{{ settings.gas_price_per_gal }}" min="0" step="0.01"
+             placeholder="3.40" style="max-width: 200px;">
+    </div>
+  </div>
+
+  {# ── Expense Tracking ── #}
+  <div class="card settings-section">
+    <div class="settings-section-title">Expense Tracking</div>
+
+    {% set labels = {
+      "fuel":         ("Fuel (mileage estimate)", "Calculated from miles ÷ MPG × gas price"),
+      "vehicle_wear": ("Vehicle wear (per mile)", "Depreciation / maintenance cost per mile driven"),
+      "insurance":    ("Insurance (monthly)",     "Spread evenly across days worked each month"),
+      "phone":        ("Phone / data (monthly)",  "Spread evenly across days worked each month"),
+      "driver":       ("Driver pay (per day)",    "Applied only on days with an assigned driver")
+    } %}
+
+    {% for key, c in expense_config.items() %}
+    {% set info = labels.get(key, (key, "")) %}
+    <div class="expense-row">
+      <div class="exp-toggle">
+        <input type="checkbox" id="exp_{{ key }}_enabled"
+               name="exp_{{ key }}_enabled"
+               value="1" {{ 'checked' if c.enabled }}>
+      </div>
+      <label class="exp-label" for="exp_{{ key }}_enabled">
+        {{ info[0] }}
+        {% if info[1] %}<br><small class="text-muted">{{ info[1] }}</small>{% endif %}
+      </label>
+      <div class="exp-amount-wrap">
+        <span class="text-muted">$</span>
+        <input type="number" name="exp_{{ key }}_amount"
+               value="{{ c.amount }}" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Options ── #}
+  <div class="card settings-section">
+    <div class="settings-section-title">Options</div>
+    <div class="options-list">
+      <label class="check-label">
+        <input type="checkbox" name="track_hours" value="1"
+               {{ 'checked' if settings.track_hours }}>
+        Track hours worked (enables $/Hour in Dashboard and History)
+      </label>
+      <label class="check-label">
+        <input type="checkbox" name="drivers_enabled" value="1"
+               {{ 'checked' if settings.drivers_enabled }}>
+        Enable multi-driver mode (adds a Driver dropdown to Log Day)
+      </label>
+    </div>
+  </div>
+
+  <div class="settings-save">
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+    <span class="text-muted" style="font-size:0.8rem;">
+      Rate and cost changes apply to future entries only.
+    </span>
+  </div>
+
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
 {% endblock %}
