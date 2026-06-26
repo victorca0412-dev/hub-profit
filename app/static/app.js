@@ -69,7 +69,7 @@
             ticks: {
               color: "#94a3b8",
               font: { size: 11 },
-              callback: function (v) { return "$" + v; }
+              callback: function (v) { return (v < 0 ? "-$" : "$") + Math.abs(v); }
             }
           }
         }
@@ -243,7 +243,12 @@
               modelSel.disabled = false;
             });
         })
-        .catch(function () { /* silent on page load */ });
+        .catch(function () {
+          // API unreachable: re-enable the make select so saved vehicle
+          // fields are not dropped from a subsequent settings save.
+          makeSel.innerHTML = '<option value="">Select make</option>';
+          makeSel.disabled = false;
+        });
     }
     preselectSaved();
 
