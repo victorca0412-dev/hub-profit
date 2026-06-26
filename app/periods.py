@@ -27,22 +27,37 @@ def days_worked_in_month(entries, year_month):
                 if e["date"].startswith(year_month)})
 
 
-def aggregate(entries):
-    month_days = {}
+def _derive_month_day_counts(entries):
+    counts = {}
+    for e in entries:
+        counts.setdefault(e["date"][:7], set()).add(e["date"])
+    return {ym: len(days) for ym, days in counts.items()}
+
+
+def computed_entries(entries, month_day_counts=None):
+    """Return [{"entry": e, "computed": <compute_entry result>}] using the
+    correct whole-month workday count and same-date entry count."""
+    if month_day_counts is None:
+        month_day_counts = _derive_month_day_counts(entries)
     date_counts = defaultdict(int)
     for e in entries:
-        ym = e["date"][:7]
-        month_days.setdefault(ym, set()).add(e["date"])
         date_counts[e["date"]] += 1
+    out = []
+    for e in entries:
+        dwim = month_day_counts.get(e["date"][:7], 1)
+        r = compute_entry(e, dwim, entries_on_date=date_counts[e["date"]])
+        out.append({"entry": e, "computed": r})
+    return out
 
+
+def aggregate(entries, month_day_counts=None):
+    rows = computed_entries(entries, month_day_counts)
     by_day = []
     totals = defaultdict(float)
     total_packages = 0
     total_hours = 0.0
-    for e in sorted(entries, key=lambda x: x["date"]):
-        ym = e["date"][:7]
-        dwim = len(month_days[ym])
-        r = compute_entry(e, dwim, entries_on_date=date_counts[e["date"]])
+    for row in sorted(rows, key=lambda x: x["entry"]["date"]):
+        e, r = row["entry"], row["computed"]
         by_day.append({"date": e["date"], "net": r["net"],
                        "earnings": r["earnings"],
                        "expenses": r["total_expenses"],

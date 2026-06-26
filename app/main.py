@@ -25,7 +25,16 @@ def db():
 
 
 def _f(val, default=None):
-    return float(val) if val not in (None, "") else default
+    try:
+        return float(val) if val not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _month_counts(conn, entries):
+    months = {e["date"][:7] for e in entries}
+    return {ym: entries_repo.distinct_workdays_in_month(conn, ym)
+            for ym in months}
 
 
 @app.get("/")
@@ -33,7 +42,8 @@ def dashboard(request: Request, period: str = "week"):
     conn = db()
     start, end = periods.range_for(period)
     entries = entries_repo.list_entries(conn, start, end)
-    agg = periods.aggregate(entries)
+    mdc = _month_counts(conn, entries)
+    agg = periods.aggregate(entries, month_day_counts=mdc)
     s = settings_repo.get_settings(conn)
     conn.close()
     return templates.TemplateResponse("dashboard.html", {
@@ -74,14 +84,9 @@ def history(request: Request, period: str = "all"):
     conn = db()
     start, end = periods.range_for(period)
     entries = entries_repo.list_entries(conn, start, end)
-    month_days = {}
-    for e in entries:
-        month_days.setdefault(e["date"][:7], set()).add(e["date"])
-    from app.calculations import compute_entry
-    rows = []
-    for e in entries:
-        r = compute_entry(e, len(month_days[e["date"][:7]]))
-        rows.append({**e, "computed": r})
+    mdc = _month_counts(conn, entries)
+    rows = [{**r["entry"], "computed": r["computed"]}
+            for r in periods.computed_entries(entries, mdc)]
     conn.close()
     return templates.TemplateResponse("history.html", {
         "request": request, "rows": rows, "period": period,

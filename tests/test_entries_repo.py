@@ -1,6 +1,6 @@
 from app.settings_repo import update_settings, update_expense_config
 from app.entries_repo import create_entry, list_entries, get_entry, \
-    delete_entry
+    delete_entry, distinct_workdays_in_month
 
 
 def test_create_entry_snapshots_current_settings(conn):
@@ -37,3 +37,12 @@ def test_delete_entry(conn):
     eid = create_entry(conn, {"date": "2026-06-24", "packages": 5, "miles": 0})
     delete_entry(conn, eid)
     assert get_entry(conn, eid) is None
+
+
+def test_distinct_workdays_in_month_counts_whole_month(conn):
+    create_entry(conn, {"date": "2026-06-01", "packages": 1, "miles": 0})
+    create_entry(conn, {"date": "2026-06-01", "packages": 1, "miles": 0})
+    create_entry(conn, {"date": "2026-06-02", "packages": 1, "miles": 0})
+    create_entry(conn, {"date": "2026-07-01", "packages": 1, "miles": 0})
+    assert distinct_workdays_in_month(conn, "2026-06") == 2
+    assert distinct_workdays_in_month(conn, "2026-07") == 1

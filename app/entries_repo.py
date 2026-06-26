@@ -43,3 +43,11 @@ def list_entries(conn, start_date, end_date):
 def delete_entry(conn, entry_id):
     conn.execute("DELETE FROM daily_entries WHERE id=?", (entry_id,))
     conn.commit()
+
+
+def distinct_workdays_in_month(conn, year_month):
+    """Count distinct dates worked in a calendar month, e.g. '2026-06'."""
+    row = conn.execute(
+        "SELECT COUNT(DISTINCT date) FROM daily_entries "
+        "WHERE substr(date, 1, 7) = ?", (year_month,)).fetchone()
+    return row[0]

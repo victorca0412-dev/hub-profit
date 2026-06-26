@@ -55,3 +55,11 @@ def test_monthly_cost_not_double_counted_for_same_date():
     agg = aggregate(entries)
     # one distinct workday -> full $140 share for that day, counted once total
     assert round(agg["total_expenses"], 2) == 140.00
+
+
+def test_aggregate_uses_injected_month_day_counts():
+    # Only 2 entries visible (a "week" view) but the real month had 20 workdays.
+    entries = [make_entry("2026-06-22", 10), make_entry("2026-06-23", 10)]
+    agg = aggregate(entries, month_day_counts={"2026-06": 20})
+    # insurance 140/20 = 7.00 per day x 2 days = 14.00 total expense
+    assert round(agg["total_expenses"], 2) == 14.00
