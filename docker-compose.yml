@@ -1,0 +1,10 @@
+services:
+  hubprofit:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - hubprofit_data:/data
+    restart: unless-stopped
+volumes:
+  hubprofit_data:

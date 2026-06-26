@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+{# ── Period switcher ── #}
+<div class="period-switcher">
+  {% for p in [("week","Week"),("month","Month"),("year","Year"),("all","All")] %}
+  <a href="/?period={{ p[0] }}" class="{{ 'active-period' if period == p[0] else '' }}">{{ p[1] }}</a>
+  {% endfor %}
+</div>
+
+{# ── Hero card ── #}
+<div class="hero-card">
+  <div class="hero-label">Net Profit &mdash; {{ period | capitalize }}</div>
+  <div class="hero-amount">{{ "-$" if agg.total_net < 0 else "$" }}{{ "%.2f" | format(agg.total_net | abs) }}</div>
+  <div class="hero-sub">
+    {{ agg.total_packages }} packages
+    &nbsp;&middot;&nbsp;
+    ${{ "%.2f" | format(agg.total_earnings) }} earned
+    &nbsp;&middot;&nbsp;
+    ${{ "%.2f" | format(agg.total_expenses) }} expenses
+  </div>
+</div>
+
+{# ── Stat cards ── #}
+<div class="stat-row">
+  <div class="stat-card">
+    <div class="stat-label">Packages</div>
+    <div class="stat-value">{{ agg.total_packages }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">$/Hour</div>
+    <div class="stat-value">
+      {% if settings.track_hours and agg.hourly is not none %}
+        ${{ "%.2f" | format(agg.hourly) }}
+      {% else %}
+        &mdash;
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Earnings</div>
+    <div class="stat-value">${{ "%.2f" | format(agg.total_earnings) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Expenses</div>
+    <div class="stat-value">${{ "%.2f" | format(agg.total_expenses) }}</div>
+  </div>
+</div>
+
+{# ── Chart ── #}
+{% if agg.by_day %}
+<div class="chart-card">
+  <div class="chart-title">Net Profit by Day</div>
+  <canvas id="netchart" height="80"></canvas>
+</div>
+{% else %}
+<div class="chart-card">
+  <p class="empty-state">No entries yet for this period. <a href="/log">Log your first day</a>.</p>
+</div>
+{% endif %}
+
+{# Embed chart data for app.js #}
+<script id="chartdata" type="application/json">{{ agg.by_day | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/chart.min.js"></script>
+<script src="/static/app.js"></script>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Log a Day</h1>
+
+{# Config blob for app.js live estimate #}
+<div id="log-config" hidden
+  data-pay-per-package="{{ settings.pay_per_package }}"
+  data-vehicle-mpg="{{ settings.vehicle_mpg }}"
+  data-gas-price="{{ settings.gas_price_per_gal }}"
+  data-fuel-enabled="{{ '1' if expense_config.get('fuel', {}).get('enabled') else '0' }}">
+</div>
+
+<div class="card">
+  <form method="post" action="/log">
+
+    <div class="form-section">
+      <div class="form-section-title">Delivery Details</div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="inp-date">Date</label>
+          <input type="date" id="inp-date" name="date" value="{{ today }}" required>
+        </div>
+        <div class="field">
+          <label for="inp-packages">Packages delivered</label>
+          <input type="number" id="inp-packages" name="packages" min="0" step="1"
+                 placeholder="e.g. 47" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="inp-miles">Miles driven</label>
+        <span class="hint">Miles driven for deliveries — from your mileage tracker</span>
+        <input type="number" id="inp-miles" name="miles" min="0" step="0.1"
+               placeholder="e.g. 38.5">
+      </div>
+
+      {% if settings.track_hours %}
+      <div class="field">
+        <label for="inp-hours">Hours worked</label>
+        <input type="number" id="inp-hours" name="hours" min="0" step="0.25"
+               placeholder="e.g. 3.5">
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Optional</div>
+
+      <div class="field">
+        <label for="inp-extra">Extra expense ($)</label>
+        <span class="hint">One-off cost for this day (parking, supplies, etc.)</span>
+        <input type="number" id="inp-extra" name="extra_expense" min="0" step="0.01"
+               placeholder="0.00">
+      </div>
+
+      {% if settings.drivers_enabled %}
+      <div class="field">
+        <label for="inp-driver">Driver</label>
+        <select id="inp-driver" name="driver_id">
+          <option value="">Me</option>
+          {% for d in drivers %}
+          <option value="{{ d.id }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="field">
+        <label for="inp-note">Note (optional)</label>
+        <input type="text" id="inp-note" name="note" placeholder="e.g. heavy rain, late start">
+      </div>
+    </div>
+
+    {# ── Live estimate box ── #}
+    <div class="estimate-box">
+      <h3>Estimated Earnings Preview</h3>
+      <div class="estimate-row">
+        <span>Earnings</span>
+        <span id="est-earnings" class="val-pos">$0.00</span>
+      </div>
+      <div class="estimate-row" id="est-fuel-line">
+        <span>Fuel cost (est.)</span>
+        <span id="est-fuel" class="val-neg">-$0.00</span>
+      </div>
+      <div class="estimate-row net">
+        <span>Net (before fixed costs)</span>
+        <span id="est-net">$0.00</span>
+      </div>
+      <p class="hint mt-1">This is an estimate. The server calculates your actual net using all configured expense rules when you save.</p>
+    </div>
+
+    <div class="mt-2">
+      <button type="submit" class="btn btn-primary">Save Day</button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js"></script>
+{% endblock %}

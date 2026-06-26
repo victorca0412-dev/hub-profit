@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Help / FAQ</h1>
+
+<div class="card help-content">
+
+  <div class="faq-item">
+    <div class="faq-q">What is HubProfit?</div>
+    <div class="faq-a">
+      <p>HubProfit is a simple, self-hosted web app that helps Amazon Hub Delivery drivers
+      track their <strong>true net profit</strong> — not just gross earnings.</p>
+      <p>It starts with your pay-per-package rate (the default is $1.65 &mdash; set yours in
+      <strong>Settings</strong>) and subtracts your real costs
+      (fuel, vehicle wear, insurance, phone, and driver pay) so you always know what you
+      actually made after expenses.</p>
+      <p>Your data lives entirely on your own machine. No account, no cloud, no subscription.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">How does the $1.65/package earnings calculation work?</div>
+    <div class="faq-a">
+      <p>Amazon Hub Delivery pays a flat rate per package delivered. The default is $1.65,
+      but you can change it in <a href="/settings">Settings &rarr; Pay per package</a>.</p>
+      <p>Your gross earnings for any given day = packages delivered &times; pay per package.
+      HubProfit then subtracts all your enabled expense categories to arrive at net profit.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">How is the fuel cost estimated?</div>
+    <div class="faq-a">
+      <p>Fuel cost = <strong>miles driven &divide; MPG &times; gas price per gallon</strong>.</p>
+      <p>When you log a day, enter the miles driven for that delivery run — use your vehicle's
+      trip odometer or a mileage-tracking app (MileIQ, Everlance, etc.) before and after
+      each delivery. HubProfit does <em>not</em> track your GPS; you provide the miles.</p>
+      <p>Use the vehicle picker in <a href="/settings">Settings</a> to auto-fill your MPG from
+      the U.S. Department of Energy database, and keep the gas price updated to stay accurate.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">What does "frozen rate" mean? Will changing Settings affect past entries?</div>
+    <div class="faq-a">
+      <p><strong>No.</strong> Each day you log is saved with a snapshot of your current pay rate,
+      MPG, gas price, and expense settings at the moment you hit Save.</p>
+      <p>If you change the pay rate from $1.65 to $1.80 next month, only days logged after
+      that change use the new rate. Every past day keeps the exact numbers it was calculated
+      with. This makes your historical records accurate and trustworthy.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">How are monthly fixed costs (insurance, phone) spread across days?</div>
+    <div class="faq-a">
+      <p>Fixed monthly costs are divided evenly across the number of <strong>distinct days you
+      worked that month</strong>.</p>
+      <p>Example: if insurance is $120/month and you worked 15 days in June, each day is
+      charged $8.00. If you only worked 10 days, each day is charged $12.00. This reflects
+      the true cost of running your business on the days you actually drove.</p>
+      <p>If multiple drivers share the same calendar date, that day's fixed-cost share is
+      split evenly among them so the date is never charged more than once total.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">How do I set up the vehicle to get my MPG automatically?</div>
+    <div class="faq-a">
+      <p>Go to <a href="/settings">Settings &rarr; Vehicle &amp; Fuel</a>. Select your vehicle's
+      <strong>Year</strong>, then wait for the <strong>Make</strong> dropdown to load (it fetches
+      real data from the U.S. DOE FuelEconomy.gov database), then select <strong>Model</strong>.
+      Click <strong>Look up MPG</strong> and the combined city/highway MPG is filled in for you.</p>
+      <p>After saving, HubProfit uses that MPG for all future entries.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">What is multi-driver mode?</div>
+    <div class="faq-a">
+      <p>If you run multiple drivers under your Hub account, enable <strong>multi-driver
+      mode</strong> in Settings. A Driver dropdown will appear on the Log Day page so you
+      can assign each entry to a specific driver.</p>
+      <p>Driver pay (a per-day expense) is only charged on days where a specific driver is
+      assigned — days you drove yourself are not charged driver pay.</p>
+      <p>You can leave this off if you drive solo.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">Can I export my data?</div>
+    <div class="faq-a">
+      <p>Yes. On the <a href="/history">History</a> page, click <strong>Download CSV</strong>
+      to export all your entries (for the currently selected period) as a spreadsheet-compatible
+      CSV file with date, packages, miles, hours, earnings, expenses, net, and hourly rate.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">Is this free? Does my data leave my computer?</div>
+    <div class="faq-a">
+      <p>HubProfit is completely free and self-hosted. The app runs on your own machine and
+      all data is stored locally in a SQLite database. Nothing is ever sent to an external
+      server except the optional MPG lookup, which queries the public
+      <a href="https://www.fueleconomy.gov" target="_blank" rel="noopener">FuelEconomy.gov</a> API.</p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
