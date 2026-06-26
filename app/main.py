@@ -163,17 +163,29 @@ def help_page(request: Request):
 
 @app.get("/api/makes")
 def api_makes(year: str):
-    return JSONResponse(fueleconomy.get_makes(year))
+    try:
+        return JSONResponse(fueleconomy.get_makes(year))
+    except Exception:
+        return JSONResponse({"error": "vehicle service unavailable"},
+                            status_code=502)
 
 
 @app.get("/api/models")
 def api_models(year: str, make: str):
-    return JSONResponse(fueleconomy.get_models(year, make))
+    try:
+        return JSONResponse(fueleconomy.get_models(year, make))
+    except Exception:
+        return JSONResponse({"error": "vehicle service unavailable"},
+                            status_code=502)
 
 
 @app.post("/api/lookup_mpg")
 def api_lookup_mpg(year: str = Form(...), make: str = Form(...),
                    model: str = Form(...)):
-    with get_db() as conn:
-        mpg = fueleconomy.cached_mpg(conn, year, make, model)
+    try:
+        with get_db() as conn:
+            mpg = fueleconomy.cached_mpg(conn, year, make, model)
+    except Exception:
+        return JSONResponse({"error": "vehicle service unavailable"},
+                            status_code=502)
     return JSONResponse({"mpg": mpg})

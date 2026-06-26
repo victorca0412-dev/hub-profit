@@ -18,9 +18,10 @@ A free, self-hosted dashboard that tracks the *real* net profit of your Amazon H
 
 ## Screenshots
 
-<!-- Add screenshots of the Dashboard, Log Day, and Settings pages here -->
+_Screenshots coming soon._
 
-![Dashboard](docs/screenshots/dashboard.png)
+<!-- Add screenshots to docs/screenshots/ and reference them here, e.g.:
+![Dashboard](docs/screenshots/dashboard.png) -->
 
 ---
 

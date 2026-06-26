@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS daily_entries (
     snap_expense_config TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_entries_date ON daily_entries(date);
 CREATE TABLE IF NOT EXISTS mpg_cache (
     cache_key TEXT PRIMARY KEY,
     payload TEXT NOT NULL,
