@@ -21,10 +21,21 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 
 ## Screenshots
 
-_Screenshots coming soon._
+**Dashboard** — your net profit at a glance, with a daily chart:
 
-<!-- Add screenshots to docs/screenshots/ and reference them here, e.g.:
-![Dashboard](docs/screenshots/dashboard.png) -->
+![HubProfit Dashboard](docs/screenshots/dashboard.png)
+
+**Log Day** — quick daily entry with a live earnings & fuel estimate:
+
+![Log a Day](docs/screenshots/log.day.png)
+
+**Settings** — set your rate, pick your vehicle (MPG auto-fills), and toggle the expenses you want counted:
+
+![Settings](docs/screenshots/settings.png)
+
+**History** — every day with net profit and $/hour, plus one-click CSV export:
+
+![History](docs/screenshots/history.png)
 
 ---
 
