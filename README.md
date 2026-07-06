@@ -108,7 +108,20 @@ docker compose up -d
 ```
 
 - Reach it from another device on your network at **http://SERVER-IP:8000** (e.g., `http://192.168.0.50:8000`).
-- **Portainer:** add it as a Git stack pointing at this repo, or use the included `docker-compose.yml`. The app listens on port **8000** and stores data in the named volume **`hubprofit_data`**.
+- **Change the port** without editing files: set the `HOST_PORT` environment variable (defaults to `8000`). e.g. `HOST_PORT=8412 docker compose up -d` → browse at `http://SERVER-IP:8412`.
+- Data is stored in the named volume **`hubprofit_data`** — don't delete it on redeploys.
+
+### Deploying with Portainer (Git stack)
+
+1. **Stacks → Add stack**, name it `hubprofit`.
+2. Build method: **Repository**.
+3. **Repository URL:** `https://github.com/victorca0412-dev/hub-profit`
+4. **Repository reference:** `refs/heads/master` (this repo's default branch is `master`, not `main`).
+5. **Compose path:** `docker-compose.yml`
+6. Under **Environment variables**, add `HOST_PORT` = your chosen port (e.g. `8412`). Skip to use the default 8000.
+7. **Deploy the stack.** Portainer builds the image from the Dockerfile and starts it. Browse to `http://SERVER-IP:<port>`.
+
+> On redeploys, **never enable "Remove volumes"** or you'll lose your logged days (they live in `hubprofit_data`).
 
 ---
 
