@@ -113,15 +113,20 @@ docker compose up -d
 
 ### Deploying with Portainer (Git stack)
 
-1. **Stacks → Add stack**, name it `hubprofit`.
-2. Build method: **Repository**.
+1. In Portainer, go to **Stacks → + Add stack** and name it `hubprofit`.
+2. **Build method:** choose **Repository**. (Not "Web editor" — this app builds its own image from the Dockerfile, which needs the repo files.)
 3. **Repository URL:** `https://github.com/victorca0412-dev/hub-profit`
-4. **Repository reference:** `refs/heads/master` (this repo's default branch is `master`, not `main`).
+4. **Repository reference:** `refs/heads/master`
+   ⚠️ Portainer defaults this to `main` — you **must** change it to `master`, or the deploy will fail.
 5. **Compose path:** `docker-compose.yml`
-6. Under **Environment variables**, add `HOST_PORT` = your chosen port (e.g. `8412`). Skip to use the default 8000.
-7. **Deploy the stack.** Portainer builds the image from the Dockerfile and starts it. Browse to `http://SERVER-IP:<port>`.
+6. **Authentication:** leave **off** (the repo is public).
+7. **Environment variables** → **+ Add an environment variable:**
+   - name: `HOST_PORT`  ·  value: your chosen port, e.g. `8412` (skip this to use the default `8000`).
+8. Click **Deploy the stack.** The first deploy builds the image from the Dockerfile and takes a minute or two. When it's up, browse to `http://SERVER-IP:<port>` (e.g. `http://192.168.0.50:8412`) and open the **Settings** tab first to set your rate, vehicle, and expenses.
 
-> On redeploys, **never enable "Remove volumes"** or you'll lose your logged days (they live in `hubprofit_data`).
+**Updating in Portainer:** open the stack → **Pull and redeploy** (rebuilds from the latest `master`). You can also enable the stack's **Automatic updates** for hands-off GitOps.
+
+> On redeploy or removal, **never enable "Remove volumes"** or you'll lose your logged days (they live in the `hubprofit_data` volume).
 
 ---
 
