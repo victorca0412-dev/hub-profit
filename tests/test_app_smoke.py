@@ -1,4 +1,5 @@
 import importlib
+from datetime import date
 from fastapi.testclient import TestClient
 
 
@@ -50,7 +51,11 @@ def test_history_csv_download(tmp_path, monkeypatch):
 
 def test_dashboard_renders_hero(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
-    client.post("/log", data={"date": "2026-06-24", "packages": "47",
+    # Use today's date so the entry falls inside the "month" view regardless
+    # of when the test runs (the chart canvas only renders when the period
+    # has data).
+    today = date.today().isoformat()
+    client.post("/log", data={"date": today, "packages": "47",
                               "miles": "38", "hours": "2.5"})
     html = client.get("/?period=month").text
     assert "Net" in html  # hero present
