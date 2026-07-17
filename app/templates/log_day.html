@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="page-title">Log a Day</h1>
+<h1 class="page-title">{{ "Edit Day" if entry else "Log a Day" }}</h1>
 
 {# Config blob for app.js live estimate #}
 <div id="log-config" hidden
@@ -12,7 +12,7 @@
 </div>
 
 <div class="card">
-  <form method="post" action="/log">
+  <form method="post" action="{{ '/log/' ~ entry.id if entry else '/log' }}">
 
     <div class="form-section">
       <div class="form-section-title">Delivery Details</div>
@@ -20,11 +20,13 @@
       <div class="field-row">
         <div class="field">
           <label for="inp-date">Date</label>
-          <input type="date" id="inp-date" name="date" value="{{ today }}" required>
+          <input type="date" id="inp-date" name="date"
+                 value="{{ entry.date if entry else today }}" required>
         </div>
         <div class="field">
           <label for="inp-packages">Packages delivered</label>
           <input type="number" id="inp-packages" name="packages" min="0" step="1"
+                 value="{{ entry.packages if entry else '' }}"
                  placeholder="e.g. 47" required>
         </div>
       </div>
@@ -33,6 +35,7 @@
         <label for="inp-miles">Miles driven</label>
         <span class="hint">Miles driven for deliveries — from your mileage tracker</span>
         <input type="number" id="inp-miles" name="miles" min="0" step="0.1"
+               value="{{ entry.miles if entry else '' }}"
                placeholder="e.g. 38.5">
       </div>
 
@@ -40,6 +43,7 @@
       <div class="field">
         <label for="inp-hours">Hours worked</label>
         <input type="number" id="inp-hours" name="hours" min="0" step="0.25"
+               value="{{ entry.hours if entry and entry.hours is not none else '' }}"
                placeholder="e.g. 3.5">
       </div>
       {% endif %}
@@ -52,6 +56,7 @@
         <label for="inp-extra">Extra expense ($)</label>
         <span class="hint">One-off cost for this day (parking, supplies, etc.)</span>
         <input type="number" id="inp-extra" name="extra_expense" min="0" step="0.01"
+               value="{{ entry.extra_expense if entry and entry.extra_expense is not none else '' }}"
                placeholder="0.00">
       </div>
 
@@ -61,7 +66,8 @@
         <select id="inp-driver" name="driver_id">
           <option value="">Me</option>
           {% for d in drivers %}
-          <option value="{{ d.id }}">{{ d.name }}</option>
+          <option value="{{ d.id }}"
+            {{ 'selected' if entry and entry.driver_id == d.id else '' }}>{{ d.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -69,7 +75,9 @@
 
       <div class="field">
         <label for="inp-note">Note (optional)</label>
-        <input type="text" id="inp-note" name="note" placeholder="e.g. heavy rain, late start">
+        <input type="text" id="inp-note" name="note"
+               value="{{ entry.note if entry and entry.note else '' }}"
+               placeholder="e.g. heavy rain, late start">
       </div>
     </div>
 
@@ -92,7 +100,7 @@
     </div>
 
     <div class="mt-2">
-      <button type="submit" class="btn btn-primary">Save Day</button>
+      <button type="submit" class="btn btn-primary">{{ "Save Changes" if entry else "Save Day" }}</button>
     </div>
 
   </form>
