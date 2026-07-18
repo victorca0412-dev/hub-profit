@@ -16,3 +16,9 @@ def set_driver_active(conn, driver_id, active):
     conn.execute("UPDATE drivers SET active=? WHERE id=?",
                  (1 if active else 0, driver_id))
     conn.commit()
+
+
+def get_driver(conn, driver_id):
+    row = conn.execute("SELECT * FROM drivers WHERE id=?",
+                       (driver_id,)).fetchone()
+    return dict(row) if row else None

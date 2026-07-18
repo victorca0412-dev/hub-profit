@@ -116,3 +116,104 @@ def test_history_row_has_edit_link(tmp_path, monkeypatch):
     html = client.get("/history?period=all").text
     assert 'href="/log?edit=1"' in html
     assert "Delete" in html  # delete still available
+
+
+def test_edit_preserves_hours_when_tracking_disabled(tmp_path, monkeypatch):
+    # A day logged with hours must keep them when edited after track_hours is off.
+    client = make_client(tmp_path, monkeypatch)
+    client.post("/log", data={"date": "2026-07-10", "packages": "40",
+                              "miles": "30", "hours": "4.5"})
+    # Turn hours tracking OFF (omit track_hours from the settings POST).
+    client.post("/settings", data={
+        "business_name": "", "pay_per_package": "1.65",
+        "gas_price_per_gal": "3.40", "vehicle_year": "", "vehicle_make": "",
+        "vehicle_model": "", "vehicle_mpg": "25"})
+    # The edit form no longer shows a visible hours input; it must still
+    # carry the existing value forward via a hidden field.
+    html = client.get("/log?edit=1").text
+    assert 'name="hours" value="4.5"' in html
+    # A real browser submits every named field on the form, hidden ones
+    # included, alongside the edited packages value.
+    client.post("/log/1", data={"date": "2026-07-10", "packages": "42",
+                                "miles": "30", "hours": "4.5"})
+    # Hours must survive.
+    from app.entries_repo import get_entry
+    from app.db import get_conn
+    import os
+    conn = get_conn(os.environ["HUBPROFIT_DB"])
+    e = get_entry(conn, 1)
+    conn.close()
+    assert e["hours"] == 4.5
+    assert e["packages"] == 42
+
+
+def test_edit_preserves_driver_when_drivers_disabled(tmp_path, monkeypatch):
+    client = make_client(tmp_path, monkeypatch)
+    import os
+    from app.db import get_conn
+    from app.drivers_repo import add_driver
+    from app.entries_repo import get_entry
+    conn = get_conn(os.environ["HUBPROFIT_DB"])
+    did = add_driver(conn, "Alex")
+    conn.close()
+    # Log a day assigned to that driver, with drivers enabled.
+    client.post("/settings", data={
+        "business_name": "", "pay_per_package": "1.65",
+        "gas_price_per_gal": "3.40", "vehicle_year": "", "vehicle_make": "",
+        "vehicle_model": "", "vehicle_mpg": "25", "track_hours": "1",
+        "drivers_enabled": "1"})
+    client.post("/log", data={"date": "2026-07-11", "packages": "20",
+                              "miles": "15", "driver_id": str(did)})
+    # Turn drivers OFF, then edit the day.
+    client.post("/settings", data={
+        "business_name": "", "pay_per_package": "1.65",
+        "gas_price_per_gal": "3.40", "vehicle_year": "", "vehicle_make": "",
+        "vehicle_model": "", "vehicle_mpg": "25", "track_hours": "1"})
+    # The edit form no longer shows the driver select; it must still carry
+    # the existing assignment forward via a hidden field.
+    html = client.get("/log?edit=1").text
+    assert 'name="driver_id" value="{}"'.format(did) in html
+    # A real browser submits every named field on the form, hidden ones
+    # included, alongside the edited packages value.
+    client.post("/log/1", data={"date": "2026-07-11", "packages": "25",
+                                "miles": "15", "driver_id": str(did)})
+    conn = get_conn(os.environ["HUBPROFIT_DB"])
+    e = get_entry(conn, 1)
+    conn.close()
+    assert e["driver_id"] == did
+    assert e["packages"] == 25
+
+
+def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
+    # drivers_enabled stays ON, but the assigned driver is deactivated.
+    client = make_client(tmp_path, monkeypatch)
+    import os
+    from app.db import get_conn
+    from app.drivers_repo import add_driver, set_driver_active
+    from app.entries_repo import get_entry
+    conn = get_conn(os.environ["HUBPROFIT_DB"])
+    did = add_driver(conn, "Sam")
+    conn.close()
+    client.post("/settings", data={
+        "business_name": "", "pay_per_package": "1.65",
+        "gas_price_per_gal": "3.40", "vehicle_year": "", "vehicle_make": "",
+        "vehicle_model": "", "vehicle_mpg": "25", "track_hours": "1",
+        "drivers_enabled": "1"})
+    client.post("/log", data={"date": "2026-07-12", "packages": "18",
+                              "miles": "12", "driver_id": str(did)})
+    conn = get_conn(os.environ["HUBPROFIT_DB"])
+    set_driver_active(conn, did, False)
+    conn.close()
+    # The edit form must render the deactivated driver as a selected option,
+    # so re-saving keeps them assigned.
+    html = client.get("/log?edit=1").text
+    assert 'value="{}"'.format(did) in html
+    assert "Sam" in html
+    resp = client.post("/log/1", data={"date": "2026-07-12", "packages": "19",
+                                       "miles": "12", "driver_id": str(did)},
+                       follow_redirects=False)
+    assert resp.status_code == 303
+    conn = get_conn(os.environ["HUBPROFIT_DB"])
+    e = get_entry(conn, 1)
+    conn.close()
+    assert e["driver_id"] == did

@@ -68,6 +68,13 @@ def log_form(request: Request, edit: int | None = None):
             entry = entries_repo.get_entry(conn, edit)
             if entry is None:
                 raise HTTPException(status_code=404, detail="Entry not found")
+            # Editing must not drop the day's assigned driver just because
+            # they were later deactivated: make sure they stay selectable.
+            if entry["driver_id"] is not None and \
+                    not any(d["id"] == entry["driver_id"] for d in drivers):
+                assigned = drivers_repo.get_driver(conn, entry["driver_id"])
+                if assigned is not None:
+                    drivers.append(assigned)
     return templates.TemplateResponse(request, "log_day.html", {
         "settings": s, "expense_config": cfg,
         "drivers": drivers, "today": date.today().isoformat(),

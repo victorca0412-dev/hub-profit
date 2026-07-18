@@ -46,6 +46,8 @@
                value="{{ entry.hours if entry and entry.hours is not none else '' }}"
                placeholder="e.g. 3.5">
       </div>
+      {% elif entry and entry.hours is not none %}
+      <input type="hidden" name="hours" value="{{ entry.hours }}">
       {% endif %}
     </div>
 
@@ -71,6 +73,8 @@
           {% endfor %}
         </select>
       </div>
+      {% elif entry and entry.driver_id is not none %}
+      <input type="hidden" name="driver_id" value="{{ entry.driver_id }}">
       {% endif %}
 
       <div class="field">
