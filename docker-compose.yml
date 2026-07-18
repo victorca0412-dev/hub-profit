@@ -5,6 +5,10 @@ services:
       # Host port is configurable via HOST_PORT (defaults to 8000).
       # e.g. set HOST_PORT=8412 to browse at http://<host>:8412
       - "${HOST_PORT:-8000}:8000"
+    environment:
+      # Timezone for date defaults and period ranges. Defaults to US Eastern;
+      # override by setting TZ in the stack env (e.g. TZ=America/Chicago).
+      - TZ=${TZ:-America/New_York}
     volumes:
       - hubprofit_data:/data
     restart: unless-stopped

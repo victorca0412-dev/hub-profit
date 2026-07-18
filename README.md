@@ -110,6 +110,7 @@ docker compose up -d
 
 - Reach it from another device on your network at **http://SERVER-IP:8000** (e.g., `http://192.168.0.50:8000`).
 - **Change the port** without editing files: set the `HOST_PORT` environment variable (defaults to `8000`). e.g. `HOST_PORT=8412 docker compose up -d` → browse at `http://SERVER-IP:8412`.
+- **Set your timezone** so the "today" date and week/month totals match your local day: set the `TZ` environment variable (defaults to `America/New_York`). e.g. `TZ=America/Chicago docker compose up -d`. Use a name from the [tz database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) (the `TZ identifier` column). Without this the app runs on UTC and will roll over to the next day in the evening.
 - Data is stored in the named volume **`hubprofit_data`** — don't delete it on redeploys.
 
 ### Deploying with Portainer (Git stack)
@@ -123,6 +124,7 @@ docker compose up -d
 6. **Authentication:** leave **off** (the repo is public).
 7. **Environment variables** → **+ Add an environment variable:**
    - name: `HOST_PORT`  ·  value: your chosen port, e.g. `8412` (skip this to use the default `8000`).
+   - name: `TZ`  ·  value: your timezone, e.g. `America/New_York` (skip this to use the default `America/New_York`). This keeps the logged date on your local day instead of UTC.
 8. Click **Deploy the stack.** The first deploy builds the image from the Dockerfile and takes a minute or two. When it's up, browse to `http://SERVER-IP:<port>` (e.g. `http://192.168.0.50:8412`) and open the **Settings** tab first to set your rate, vehicle, and expenses.
 
 **Updating in Portainer:** open the stack → **Pull and redeploy** (rebuilds from the latest `master`). You can also enable the stack's **Automatic updates** for hands-off GitOps.
