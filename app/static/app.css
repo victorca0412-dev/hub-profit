@@ -369,6 +369,13 @@ button.btn { font-family: inherit; }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover td { background: #f8fafc; }
 
+.row-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.row-actions a.btn:hover { text-decoration: none; }
+
 .text-right { text-align: right; }
 .text-green { color: #16a34a; }
 .text-red   { color: #dc2626; }

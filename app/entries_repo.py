@@ -40,6 +40,26 @@ def list_entries(conn, start_date, end_date):
     return [_row_to_entry(r) for r in rows]
 
 
+def update_entry(conn, entry_id, data):
+    """Update the user-entered fields of an entry.
+
+    Deliberately does not touch any snap_* column. The frozen rates are what
+    keep past days correct when settings change later, so correcting a typo
+    must never reprice the day. Returns True if a row matched.
+    """
+    cur = conn.execute(
+        """UPDATE daily_entries
+           SET date=?, driver_id=?, packages=?, miles=?, hours=?,
+               extra_expense=?, note=?
+           WHERE id=?""",
+        (data["date"], data.get("driver_id"), data["packages"],
+         data.get("miles", 0.0), data.get("hours"), data.get("extra_expense"),
+         data.get("note"), entry_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def delete_entry(conn, entry_id):
     conn.execute("DELETE FROM daily_entries WHERE id=?", (entry_id,))
     conn.commit()

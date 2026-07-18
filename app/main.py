@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -58,15 +58,27 @@ def dashboard(request: Request, period: str = "week"):
 
 
 @app.get("/log")
-def log_form(request: Request):
+def log_form(request: Request, edit: int | None = None):
     with get_db() as conn:
         s = settings_repo.get_settings(conn)
         cfg = settings_repo.get_expense_config(conn)
         drivers = drivers_repo.list_drivers(conn, only_active=True)
+        entry = None
+        if edit is not None:
+            entry = entries_repo.get_entry(conn, edit)
+            if entry is None:
+                raise HTTPException(status_code=404, detail="Entry not found")
+            # Editing must not drop the day's assigned driver just because
+            # they were later deactivated: make sure they stay selectable.
+            if entry["driver_id"] is not None and \
+                    not any(d["id"] == entry["driver_id"] for d in drivers):
+                assigned = drivers_repo.get_driver(conn, entry["driver_id"])
+                if assigned is not None:
+                    drivers.append(assigned)
     return templates.TemplateResponse(request, "log_day.html", {
         "settings": s, "expense_config": cfg,
         "drivers": drivers, "today": date.today().isoformat(),
-        "active": "log"})
+        "entry": entry, "active": "log"})
 
 
 @app.post("/log")
@@ -81,6 +93,22 @@ def log_submit(date: str = Form(...), packages: int = Form(...),
             "driver_id": int(driver_id) if driver_id else None,
             "note": note or None})
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/log/{entry_id}")
+def log_update(entry_id: int, date: str = Form(...), packages: int = Form(...),
+               miles: float = Form(0.0), hours: str = Form(""),
+               extra_expense: str = Form(""), driver_id: str = Form(""),
+               note: str = Form("")):
+    with get_db() as conn:
+        ok = entries_repo.update_entry(conn, entry_id, {
+            "date": date, "packages": packages, "miles": miles,
+            "hours": _f(hours), "extra_expense": _f(extra_expense),
+            "driver_id": int(driver_id) if driver_id else None,
+            "note": note or None})
+    if not ok:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return RedirectResponse("/history", status_code=303)
 
 
 @app.get("/history")

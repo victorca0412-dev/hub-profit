@@ -9,6 +9,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 ## What it does
 
 - Logs each day's **packages delivered** and **miles driven**
+- **Edit any logged day** — fix a typo or a wrong date without deleting and re-entering it
 - **Auto-estimates your fuel cost** from your vehicle's MPG (pulled free from the U.S. EPA database) and your gas price — no receipts to dig through
 - Spreads **fixed monthly costs** (insurance, phone, etc.) across the days you actually work
 - Shows **net profit** by day, week, month, and year — with a chart
