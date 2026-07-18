@@ -208,7 +208,7 @@ def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
     # so re-saving keeps them assigned.
     html = client.get("/log?edit=1").text
     assert 'value="{}"'.format(did) in html
-    assert "Sam" in html
+    assert 'name="driver_id"' in html and "Sam" in html
     resp = client.post("/log/1", data={"date": "2026-07-12", "packages": "19",
                                        "miles": "12", "driver_id": str(did)},
                        follow_redirects=False)
