@@ -48,9 +48,12 @@
           {% endif %}
         </td>
         <td>
-          <form method="post" action="/history/delete/{{ r.id }}" class="delete-day-form">
-            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-          </form>
+          <div class="row-actions">
+            <a class="btn btn-sm btn-ghost" href="/log?edit={{ r.id }}">Edit</a>
+            <form method="post" action="/history/delete/{{ r.id }}" class="delete-day-form">
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}

@@ -107,3 +107,12 @@ def test_edit_post_unknown_id_returns_404(tmp_path, monkeypatch):
     resp = client.post("/log/9999", data={"date": "2026-07-16",
                                           "packages": "1", "miles": "0"})
     assert resp.status_code == 404
+
+
+def test_history_row_has_edit_link(tmp_path, monkeypatch):
+    client = make_client(tmp_path, monkeypatch)
+    client.post("/log", data={"date": "2026-07-17", "packages": "47",
+                              "miles": "38"})
+    html = client.get("/history?period=all").text
+    assert 'href="/log?edit=1"' in html
+    assert "Delete" in html  # delete still available
