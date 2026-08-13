@@ -48,6 +48,33 @@ def update_business(conn, business_id, values):
     conn.commit()
 
 
+def get_tiers(conn, business_id):
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM rate_tiers WHERE business_id=? ORDER BY min_packages",
+        (business_id,))]
+
+
+def replace_tiers(conn, business_id, tiers):
+    """Replace a business's whole tier table.
+
+    `tiers` is an ordered list of (max_packages | None, rate). Lower
+    bounds are derived here rather than stored from the form: the first
+    tier always starts at 1 and each next starts one above the previous
+    ceiling, which makes a gap or an overlap unrepresentable.
+    """
+    conn.execute("DELETE FROM rate_tiers WHERE business_id=?", (business_id,))
+    low = 1
+    for max_packages, rate in tiers:
+        conn.execute(
+            "INSERT INTO rate_tiers (business_id, min_packages, "
+            "max_packages, rate) VALUES (?,?,?,?)",
+            (business_id, low, max_packages, rate))
+        if max_packages is None:
+            break  # an unbounded tier must be the last one
+        low = max_packages + 1
+    conn.commit()
+
+
 def set_archived(conn, business_id, archived):
     if archived:
         remaining = conn.execute(

@@ -8,25 +8,37 @@ def _row_to_entry(row):
         return None
     e = dict(row)
     e["snap_expense_config"] = json.loads(e["snap_expense_config"])
+    if e.get("snap_rate_tiers"):
+        e["snap_rate_tiers"] = json.loads(e["snap_rate_tiers"])
     return e
 
 
 def create_entry(conn, data, business_id):
     s = get_settings(conn)
     cfg = get_expense_config(conn, business_id)
-    rate = conn.execute(
-        "SELECT pay_per_package FROM businesses WHERE id=?",
-        (business_id,)).fetchone()[0]
+    b = conn.execute(
+        "SELECT pay_per_package, rate_model FROM businesses WHERE id=?",
+        (business_id,)).fetchone()
+    tiers = None
+    if b["rate_model"] == "tiered":
+        rows = conn.execute(
+            "SELECT min_packages, max_packages, rate FROM rate_tiers "
+            "WHERE business_id=? ORDER BY min_packages",
+            (business_id,)).fetchall()
+        # Freeze the whole table, not the resolved rate. Storing the rate
+        # would pin a 45-package price onto a day later corrected to 38.
+        tiers = json.dumps([dict(r) for r in rows]) if rows else None
     cur = conn.execute(
         """INSERT INTO daily_entries
            (business_id, date, driver_id, packages, miles, hours,
             extra_expense, note, snap_pay_per_package, snap_gas_price,
-            snap_mpg, snap_expense_config)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            snap_mpg, snap_expense_config, snap_rate_model, snap_rate_tiers)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (business_id, data["date"], data.get("driver_id"), data["packages"],
          data.get("miles", 0.0), data.get("hours"), data.get("extra_expense"),
-         data.get("note"), rate, s["gas_price_per_gal"], s["vehicle_mpg"],
-         json.dumps(cfg)),
+         data.get("note"), b["pay_per_package"], s["gas_price_per_gal"],
+         s["vehicle_mpg"], json.dumps(cfg),
+         b["rate_model"] if tiers else "flat", tiers),
     )
     conn.commit()
     return cur.lastrowid

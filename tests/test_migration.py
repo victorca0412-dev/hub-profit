@@ -207,7 +207,8 @@ class TestMigration:
             conn.execute("SELECT COUNT(*) FROM businesses").fetchone()[0],
             conn.execute("SELECT COUNT(*) FROM expense_config").fetchone()[0],
             conn.execute("SELECT COUNT(*) FROM daily_entries").fetchone()[0])
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert (conn.execute("PRAGMA user_version").fetchone()[0]
+                == db.SCHEMA_VERSION)
         conn.close()
         assert snapshot == again
 
@@ -280,7 +281,8 @@ class TestMigration:
         path = str(tmp_path / "fresh.db")
         db.init_db(path)
         conn = db.get_conn(path)
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert (conn.execute("PRAGMA user_version").fetchone()[0]
+                == db.SCHEMA_VERSION)
         assert conn.execute(
             "SELECT COUNT(*) FROM businesses").fetchone()[0] == 1
         # A fresh install must get the default expense rows, or every day
