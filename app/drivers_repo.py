@@ -22,3 +22,10 @@ def get_driver(conn, driver_id):
     row = conn.execute("SELECT * FROM drivers WHERE id=?",
                        (driver_id,)).fetchone()
     return dict(row) if row else None
+
+
+def rename_driver(conn, driver_id, name):
+    cur = conn.execute("UPDATE drivers SET name=? WHERE id=?",
+                       (name, driver_id))
+    conn.commit()
+    return cur.rowcount > 0

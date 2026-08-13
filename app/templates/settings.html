@@ -5,6 +5,12 @@
 
 <form method="post" action="/settings" id="settings-form">
 
+  {% if errors %}
+  <div class="form-error-banner">
+    Nothing was saved. Please correct the highlighted fields below.
+  </div>
+  {% endif %}
+
   {# ── Pay & Earnings ── #}
   <div class="card settings-section">
     <div class="settings-section-title">Pay &amp; Earnings</div>
@@ -18,7 +24,8 @@
       <div class="field">
         <label for="pay_per_package">Pay per package ($)</label>
         <input type="number" id="pay_per_package" name="pay_per_package"
-               value="{{ settings.pay_per_package }}" min="0" step="0.01" placeholder="1.65">
+               value="{{ values.pay_per_package }}" min="0" step="0.01" placeholder="1.65">
+        {% if errors.pay_per_package %}<p class="field-error">{{ errors.pay_per_package }}</p>{% endif %}
       </div>
     </div>
   </div>
@@ -56,8 +63,9 @@
       <div class="field">
         <label for="vehicle_mpg">Fuel economy (MPG)</label>
         <input type="number" id="vehicle_mpg" name="vehicle_mpg"
-               value="{{ settings.vehicle_mpg }}" min="0" step="0.1"
+               value="{{ values.vehicle_mpg }}" min="0" step="0.1"
                placeholder="e.g. 28.0">
+        {% if errors.vehicle_mpg %}<p class="field-error">{{ errors.vehicle_mpg }}</p>{% endif %}
       </div>
       <button type="button" id="mpg-lookup-btn" class="btn btn-ghost">Look up MPG</button>
     </div>
@@ -65,8 +73,9 @@
     <div class="field">
       <label for="gas_price_per_gal">Gas price per gallon ($)</label>
       <input type="number" id="gas_price_per_gal" name="gas_price_per_gal"
-             value="{{ settings.gas_price_per_gal }}" min="0" step="0.01"
+             value="{{ values.gas_price_per_gal }}" min="0" step="0.01"
              placeholder="3.40" style="max-width: 200px;">
+      {% if errors.gas_price_per_gal %}<p class="field-error">{{ errors.gas_price_per_gal }}</p>{% endif %}
     </div>
   </div>
 
@@ -128,6 +137,45 @@
   </div>
 
 </form>
+
+{# ── Drivers ──
+   Deliberately outside the settings form: each row is its own form and
+   HTML does not allow nested forms. #}
+{% if settings.drivers_enabled %}
+<div class="card settings-section">
+  <div class="settings-section-title">Drivers</div>
+  <p class="hint">
+    Days assigned to a driver are charged the &ldquo;Driver pay (per day)&rdquo;
+    expense. Days you drove yourself are not.
+  </p>
+
+  {% if errors.driver_name %}
+  <p class="field-error">{{ errors.driver_name }}</p>
+  {% endif %}
+
+  {% for d in drivers %}
+  <div class="driver-row">
+    <form method="post" action="/settings/drivers/{{ d.id }}/rename"
+          class="driver-rename">
+      <input type="text" name="name" value="{{ d.name }}" required>
+      <button type="submit" class="btn btn-sm btn-ghost">Rename</button>
+    </form>
+    <form method="post" action="/settings/drivers/{{ d.id }}/active">
+      <input type="hidden" name="active" value="{{ '0' if d.active else '1' }}">
+      <button type="submit" class="btn btn-sm btn-ghost">
+        {{ "Deactivate" if d.active else "Reactivate" }}
+      </button>
+    </form>
+    {% if not d.active %}<span class="text-muted">inactive</span>{% endif %}
+  </div>
+  {% endfor %}
+
+  <form method="post" action="/settings/drivers" class="driver-add">
+    <input type="text" name="name" placeholder="New driver name" required>
+    <button type="submit" class="btn btn-ghost">Add driver</button>
+  </form>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

@@ -1,6 +1,12 @@
+import csv
 import importlib
+import io
 from datetime import date
+
+import pytest
 from fastapi.testclient import TestClient
+
+from app.db import get_conn
 
 
 def make_client(tmp_path, monkeypatch):
@@ -8,6 +14,61 @@ def make_client(tmp_path, monkeypatch):
     import app.main as main
     importlib.reload(main)
     return TestClient(main.app)
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    """A TestClient that also carries the path of the DB it is using.
+
+    The raw-table helpers below need it: the Bug C orphan rows are by
+    definition invisible to the repo layer, so asserting they were never
+    written means querying the table directly.
+    """
+    db_path = tmp_path / "smoke.db"
+    monkeypatch.setenv("HUBPROFIT_DB", str(db_path))
+    import app.main as main
+    importlib.reload(main)
+    c = TestClient(main.app)
+    c.db_path = str(db_path)
+    return c
+
+
+def _scalar(client, sql, params=()):
+    conn = get_conn(client.db_path)
+    try:
+        row = conn.execute(sql, params).fetchone()
+        return None if row is None else row[0]
+    finally:
+        conn.close()
+
+
+def _raw_entry_count(client):
+    return _scalar(client, "SELECT COUNT(*) FROM daily_entries")
+
+
+def _first_entry_id(client):
+    return _scalar(client, "SELECT id FROM daily_entries ORDER BY id LIMIT 1")
+
+
+def _entry_date(client, entry_id):
+    return _scalar(client, "SELECT date FROM daily_entries WHERE id=?",
+                   (entry_id,))
+
+
+def _first_driver_id(client):
+    return _scalar(client, "SELECT id FROM drivers ORDER BY id LIMIT 1")
+
+
+def _stored_rate(client):
+    return _scalar(client, "SELECT pay_per_package FROM settings WHERE id=1")
+
+
+def _stored_gas(client):
+    return _scalar(client, "SELECT gas_price_per_gal FROM settings WHERE id=1")
+
+
+def _stored_business_name(client):
+    return _scalar(client, "SELECT business_name FROM settings WHERE id=1")
 
 
 def test_pages_load(tmp_path, monkeypatch):
@@ -217,3 +278,165 @@ def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
     e = get_entry(conn, 1)
     conn.close()
     assert e["driver_id"] == did
+
+
+class TestLogValidation:
+    def test_malformed_date_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "not-a-date", "packages": "10", "miles": "5"})
+        assert r.status_code == 400
+        assert "YYYY-MM-DD" in r.text
+
+    def test_malformed_date_writes_nothing(self, client):
+        client.post("/log", data={
+            "date": "not-a-date", "packages": "10", "miles": "5"})
+        # The orphan bug: such a row is invisible to list_entries, so
+        # assert against the raw table instead.
+        assert _raw_entry_count(client) == 0
+
+    def test_negative_packages_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "-50", "miles": "5"})
+        assert r.status_code == 400
+        assert "negative" in r.text.lower()
+        assert _raw_entry_count(client) == 0
+
+    def test_negative_miles_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "10", "miles": "-5"})
+        assert r.status_code == 400
+        assert _raw_entry_count(client) == 0
+
+    def test_garbage_hours_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "10", "miles": "5",
+            "hours": "abc"})
+        assert r.status_code == 400
+        assert _raw_entry_count(client) == 0
+
+    def test_blank_hours_still_accepted(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "10", "miles": "5",
+            "hours": ""}, follow_redirects=False)
+        assert r.status_code == 303
+
+    def test_rejected_form_redisplays_what_was_typed(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "-50", "miles": "38.5"})
+        assert r.status_code == 400
+        assert "38.5" in r.text
+        assert "2026-08-01" in r.text
+
+    def test_valid_submission_still_works(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "47", "miles": "38.5"},
+            follow_redirects=False)
+        assert r.status_code == 303
+        assert _raw_entry_count(client) == 1
+
+    def test_edit_rejects_bad_date_and_leaves_entry_alone(self, client):
+        client.post("/log", data={
+            "date": "2026-08-01", "packages": "47", "miles": "38.5"})
+        entry_id = _first_entry_id(client)
+        r = client.post(f"/log/{entry_id}", data={
+            "date": "nope", "packages": "47", "miles": "38.5"})
+        assert r.status_code == 400
+        assert _entry_date(client, entry_id) == "2026-08-01"
+
+
+class TestSettingsValidation:
+    def _save(self, client, follow_redirects=True, **overrides):
+        data = {"business_name": "Test Co", "pay_per_package": "2.50",
+                "gas_price_per_gal": "3.40", "vehicle_mpg": "28"}
+        data.update(overrides)
+        return client.post("/settings", data=data,
+                           follow_redirects=follow_redirects)
+
+    def test_blank_rate_does_not_silently_reset_to_default(self, client):
+        self._save(client, pay_per_package="2.50")
+        r = self._save(client, pay_per_package="")
+        assert r.status_code == 400
+        assert _stored_rate(client) == 2.50
+
+    def test_garbage_rate_is_rejected(self, client):
+        self._save(client, pay_per_package="2.50")
+        r = self._save(client, pay_per_package="abc")
+        assert r.status_code == 400
+        assert _stored_rate(client) == 2.50
+
+    def test_negative_rate_is_rejected(self, client):
+        self._save(client, pay_per_package="2.50")
+        r = self._save(client, pay_per_package="-1")
+        assert r.status_code == 400
+        assert _stored_rate(client) == 2.50
+
+    def test_blank_gas_price_does_not_reset(self, client):
+        self._save(client, gas_price_per_gal="4.10")
+        r = self._save(client, gas_price_per_gal="")
+        assert r.status_code == 400
+        assert _stored_gas(client) == 4.10
+
+    def test_a_rejected_save_writes_no_field_at_all(self, client):
+        self._save(client, business_name="Original", pay_per_package="2.50")
+        self._save(client, business_name="Changed", pay_per_package="")
+        assert _stored_business_name(client) == "Original"
+
+    def test_valid_save_still_works(self, client):
+        r = self._save(client, pay_per_package="1.90", follow_redirects=False)
+        assert r.status_code in (200, 303)
+        assert _stored_rate(client) == 1.90
+
+
+class TestDriverManagement:
+    ENABLE = {"business_name": "T", "pay_per_package": "1.65",
+              "gas_price_per_gal": "3.40", "vehicle_mpg": "25",
+              "drivers_enabled": "1"}
+
+    def test_a_driver_can_be_added_and_appears_on_log_day(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        assert "Alex" in client.get("/settings").text
+        assert "Alex" in client.get("/log").text
+
+    def test_a_blank_driver_name_is_rejected(self, client):
+        r = client.post("/settings/drivers", data={"name": "  "})
+        assert r.status_code == 400
+
+    def test_a_driver_can_be_renamed(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        driver_id = _first_driver_id(client)
+        client.post(f"/settings/drivers/{driver_id}/rename",
+                    data={"name": "Alexandra"})
+        assert "Alexandra" in client.get("/settings").text
+
+    def test_a_deactivated_driver_leaves_the_log_day_dropdown(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        driver_id = _first_driver_id(client)
+        client.post(f"/settings/drivers/{driver_id}/active",
+                    data={"active": "0"})
+        page = client.get("/log").text
+        select = page.split('id="inp-driver"')[1].split("</select>")[0]
+        assert "Alex" not in select
+
+    def test_driver_pay_applies_only_on_a_driver_day(self, client):
+        data = dict(self.ENABLE)
+        data.update({"exp_driver_enabled": "1", "exp_driver_amount": "100"})
+        client.post("/settings", data=data)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        driver_id = _first_driver_id(client)
+        client.post("/log", data={
+            "date": "2026-08-03", "packages": "100", "miles": "0",
+            "driver_id": str(driver_id)})
+        client.post("/log", data={
+            "date": "2026-08-04", "packages": "100", "miles": "0"})
+        # Assert against the CSV, not the HTML: both rows earn $165.00, so
+        # a substring check on the page cannot tell the net column from the
+        # earnings column.
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        by_date = {r["date"]: r for r in rows}
+        # 100 pkgs x $1.65 = $165.00 earned on both days.
+        assert float(by_date["2026-08-03"]["net"]) == 65.0   # less $100 driver pay
+        assert float(by_date["2026-08-04"]["net"]) == 165.0  # drove it myself
