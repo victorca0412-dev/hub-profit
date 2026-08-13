@@ -228,6 +228,54 @@ class TestMigration:
         conn.close()
         assert row["date"] == "2026-07-05"
 
+    def test_repairing_an_orphan_respreads_that_month_s_monthly_costs(
+            self, v1_db):
+        """Documented, intentional consequence of the Bug C repair.
+
+        A monthly cost is spread across the days worked that month. An
+        orphan row was a real day worked that no query could see, so it
+        was excluded from that divisor. Making it visible necessarily
+        adds a workday and every day in that month gets a slightly
+        smaller share.
+
+        The alternative - leaving the orphan invisible so the arithmetic
+        never moves - means permanently under-reporting days worked and
+        losing a day's earnings. Recorded here so this is never
+        "corrected" back.
+        """
+        conn = sqlite3.connect(v1_db)
+        # A day that no query could reach, created on a date not already
+        # worked, so repairing it genuinely adds a July workday.
+        conn.execute(
+            "INSERT INTO daily_entries (date, packages, miles, "
+            "snap_pay_per_package, snap_gas_price, snap_mpg, "
+            "snap_expense_config, created_at) "
+            "VALUES ('not-a-date', 44, 31.0, 1.65, 3.40, 28.0, ?, "
+            "'2026-07-26 09:00:00')", (SNAP_CFG,))
+        conn.commit()
+        conn.close()
+
+        before = _nets(v1_db)
+        db.init_db(v1_db)
+        after = _nets(v1_db)
+
+        # The fixture has 2 July days; the repair makes it 3.
+        # Insurance is $150/month, so the share per day falls from
+        # 150/2 to 150/3 and each day's net rises by the difference.
+        expected_gain = 150.0 / 2 - 150.0 / 3
+        assert after["2026-07-01"] - before["2026-07-01"] == \
+            pytest.approx(expected_gain, abs=1e-6)
+        # And the repaired day is now visible on its own created_at date.
+        assert "2026-07-26" in after
+
+    def test_migration_alone_changes_no_net_when_there_is_no_orphan(
+            self, v1_db):
+        # The companion to the test above: absent an orphan, the upgrade
+        # is arithmetically inert.
+        before = _nets(v1_db)
+        db.init_db(v1_db)
+        assert _nets(v1_db) == before
+
     def test_a_fresh_database_lands_at_the_current_version(self, tmp_path):
         path = str(tmp_path / "fresh.db")
         db.init_db(path)

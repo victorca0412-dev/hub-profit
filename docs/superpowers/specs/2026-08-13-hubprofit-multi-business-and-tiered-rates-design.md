@@ -223,8 +223,25 @@ Steps for version 2, in order:
 7. Set `PRAGMA user_version = 2`.
 
 **Existing entries keep computing off `snap_pay_per_package` with `snap_rate_model =
-'flat'`, exactly as they do today. No historical number changes.** A regression test
-asserts this against a database seeded in the pre-migration schema.
+'flat'`, exactly as they do today. The migration is arithmetically inert.** A
+regression test asserts this against a database seeded in the pre-migration schema.
+
+**One documented exception: repairing a Bug C orphan (step 6) does move numbers, and
+must.** A monthly fixed cost is spread across the days worked that month. An orphan
+was a real day worked that no query could see, so it was excluded from that divisor.
+Making it visible adds a workday, and every day in that month gets a slightly smaller
+share of the monthly cost — each day's net rises accordingly.
+
+Verified: with a $150/month insurance cost and 25 visible July days, repairing one
+orphan into a 26th day moves the insurance share from $6.00 to $5.769 and lifts every
+July day's net by $0.2308.
+
+The alternative — leaving orphans invisible so the arithmetic never moves — means
+permanently under-reporting days worked and silently losing a day's earnings. The
+respread is the correct answer, not a side effect to be suppressed. A test records
+this so it is never "corrected" back.
+
+Databases with no orphan rows, which is nearly all of them, see no change at all.
 
 ### The switcher
 
