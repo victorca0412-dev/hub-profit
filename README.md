@@ -14,6 +14,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 - Spreads **fixed monthly costs** (insurance, phone, etc.) across the days you actually work
 - Shows **net profit** by day, week, month, and year — with a chart
 - Optional **$/hour** so you know your true hourly rate
+- Optional **multi-driver mode** — add drivers, assign a day to one of them, and charge driver pay only on the days they worked
 - **CSV export** for taxes and record-keeping
 - **Your rates are frozen in history** — change your pay-per-package later and past days stay correct
 - **100% private** — everything runs on your own computer. No account, no cloud, no tracking.
