@@ -385,3 +385,58 @@ class TestSettingsValidation:
         r = self._save(client, pay_per_package="1.90", follow_redirects=False)
         assert r.status_code in (200, 303)
         assert _stored_rate(client) == 1.90
+
+
+class TestDriverManagement:
+    ENABLE = {"business_name": "T", "pay_per_package": "1.65",
+              "gas_price_per_gal": "3.40", "vehicle_mpg": "25",
+              "drivers_enabled": "1"}
+
+    def test_a_driver_can_be_added_and_appears_on_log_day(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        assert "Alex" in client.get("/settings").text
+        assert "Alex" in client.get("/log").text
+
+    def test_a_blank_driver_name_is_rejected(self, client):
+        r = client.post("/settings/drivers", data={"name": "  "})
+        assert r.status_code == 400
+
+    def test_a_driver_can_be_renamed(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        driver_id = _first_driver_id(client)
+        client.post(f"/settings/drivers/{driver_id}/rename",
+                    data={"name": "Alexandra"})
+        assert "Alexandra" in client.get("/settings").text
+
+    def test_a_deactivated_driver_leaves_the_log_day_dropdown(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        driver_id = _first_driver_id(client)
+        client.post(f"/settings/drivers/{driver_id}/active",
+                    data={"active": "0"})
+        page = client.get("/log").text
+        select = page.split('id="inp-driver"')[1].split("</select>")[0]
+        assert "Alex" not in select
+
+    def test_driver_pay_applies_only_on_a_driver_day(self, client):
+        data = dict(self.ENABLE)
+        data.update({"exp_driver_enabled": "1", "exp_driver_amount": "100"})
+        client.post("/settings", data=data)
+        client.post("/settings/drivers", data={"name": "Alex"})
+        driver_id = _first_driver_id(client)
+        client.post("/log", data={
+            "date": "2026-08-03", "packages": "100", "miles": "0",
+            "driver_id": str(driver_id)})
+        client.post("/log", data={
+            "date": "2026-08-04", "packages": "100", "miles": "0"})
+        # Assert against the CSV, not the HTML: both rows earn $165.00, so
+        # a substring check on the page cannot tell the net column from the
+        # earnings column.
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        by_date = {r["date"]: r for r in rows}
+        # 100 pkgs x $1.65 = $165.00 earned on both days.
+        assert float(by_date["2026-08-03"]["net"]) == 65.0   # less $100 driver pay
+        assert float(by_date["2026-08-04"]["net"]) == 165.0  # drove it myself

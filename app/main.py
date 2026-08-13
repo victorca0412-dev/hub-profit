@@ -290,6 +290,44 @@ async def settings_save(request: Request):
     return RedirectResponse("/settings", status_code=303)
 
 
+@app.post("/settings/drivers")
+async def driver_add(request: Request):
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    with get_db() as conn:
+        if not name:
+            return _render_settings(
+                request, conn, _stored_settings_values(conn),
+                {"driver_name": "Driver name is required."}, status=400)
+        drivers_repo.add_driver(conn, name)
+    return RedirectResponse("/settings", status_code=303)
+
+
+@app.post("/settings/drivers/{driver_id}/rename")
+async def driver_rename(request: Request, driver_id: int):
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    with get_db() as conn:
+        if not name:
+            return _render_settings(
+                request, conn, _stored_settings_values(conn),
+                {"driver_name": "Driver name is required."}, status=400)
+        if not drivers_repo.rename_driver(conn, driver_id, name):
+            raise HTTPException(status_code=404, detail="Driver not found")
+    return RedirectResponse("/settings", status_code=303)
+
+
+@app.post("/settings/drivers/{driver_id}/active")
+async def driver_set_active(request: Request, driver_id: int):
+    form = await request.form()
+    with get_db() as conn:
+        if drivers_repo.get_driver(conn, driver_id) is None:
+            raise HTTPException(status_code=404, detail="Driver not found")
+        drivers_repo.set_driver_active(
+            conn, driver_id, form.get("active") == "1")
+    return RedirectResponse("/settings", status_code=303)
+
+
 @app.get("/help")
 def help_page(request: Request):
     return templates.TemplateResponse(request, "help.html", {"active": "help"})

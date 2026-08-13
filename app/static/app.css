@@ -561,3 +561,14 @@ button.btn { font-family: inherit; }
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
+
+/* ── Driver management ── */
+.driver-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.driver-row form { display: flex; gap: 0.5rem; margin: 0; }
+.driver-add { display: flex; gap: 0.5rem; margin-top: 0.75rem; }

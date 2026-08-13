@@ -137,6 +137,45 @@
   </div>
 
 </form>
+
+{# ── Drivers ──
+   Deliberately outside the settings form: each row is its own form and
+   HTML does not allow nested forms. #}
+{% if settings.drivers_enabled %}
+<div class="card settings-section">
+  <div class="settings-section-title">Drivers</div>
+  <p class="hint">
+    Days assigned to a driver are charged the &ldquo;Driver pay (per day)&rdquo;
+    expense. Days you drove yourself are not.
+  </p>
+
+  {% if errors.driver_name %}
+  <p class="field-error">{{ errors.driver_name }}</p>
+  {% endif %}
+
+  {% for d in drivers %}
+  <div class="driver-row">
+    <form method="post" action="/settings/drivers/{{ d.id }}/rename"
+          class="driver-rename">
+      <input type="text" name="name" value="{{ d.name }}" required>
+      <button type="submit" class="btn btn-sm btn-ghost">Rename</button>
+    </form>
+    <form method="post" action="/settings/drivers/{{ d.id }}/active">
+      <input type="hidden" name="active" value="{{ '0' if d.active else '1' }}">
+      <button type="submit" class="btn btn-sm btn-ghost">
+        {{ "Deactivate" if d.active else "Reactivate" }}
+      </button>
+    </form>
+    {% if not d.active %}<span class="text-muted">inactive</span>{% endif %}
+  </div>
+  {% endfor %}
+
+  <form method="post" action="/settings/drivers" class="driver-add">
+    <input type="text" name="name" placeholder="New driver name" required>
+    <button type="submit" class="btn btn-ghost">Add driver</button>
+  </form>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
