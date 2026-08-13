@@ -1,13 +1,15 @@
 ALLOWED_SETTINGS = {
-    "business_name", "pay_per_package", "gas_price_per_gal",
-    "vehicle_year", "vehicle_make", "vehicle_model", "vehicle_mpg",
-    "track_hours", "drivers_enabled",
+    "gas_price_per_gal", "vehicle_year", "vehicle_make", "vehicle_model",
+    "vehicle_mpg", "track_hours",
 }
 
 
 def get_settings(conn):
-    row = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
-    return dict(row)
+    """The global settings row: vehicle, fuel, and display preferences.
+
+    Pay rate and driver mode live on the business, not here.
+    """
+    return dict(conn.execute("SELECT * FROM settings WHERE id=1").fetchone())
 
 
 def update_settings(conn, values):
@@ -20,9 +22,22 @@ def update_settings(conn, values):
     conn.commit()
 
 
-def get_expense_config(conn):
+def get_active_business_id(conn):
+    return conn.execute(
+        "SELECT active_business_id FROM settings WHERE id=1").fetchone()[0]
+
+
+def set_active_business(conn, business_id):
+    conn.execute("UPDATE settings SET active_business_id=? WHERE id=1",
+                 (business_id,))
+    conn.commit()
+
+
+def get_expense_config(conn, business_id):
     out = {}
-    for r in conn.execute("SELECT key, enabled, mode, amount FROM expense_config"):
+    for r in conn.execute(
+            "SELECT key, enabled, mode, amount FROM expense_config "
+            "WHERE business_id=?", (business_id,)):
         out[r["key"]] = {
             "enabled": bool(r["enabled"]),
             "mode": r["mode"],
@@ -31,13 +46,15 @@ def get_expense_config(conn):
     return out
 
 
-def update_expense_config(conn, key, enabled=None, amount=None):
+def update_expense_config(conn, business_id, key, enabled=None, amount=None):
     if enabled is None and amount is None:
         return
     if enabled is not None:
-        conn.execute("UPDATE expense_config SET enabled=? WHERE key=?",
-                     (1 if enabled else 0, key))
+        conn.execute("UPDATE expense_config SET enabled=? "
+                     "WHERE business_id=? AND key=?",
+                     (1 if enabled else 0, business_id, key))
     if amount is not None:
-        conn.execute("UPDATE expense_config SET amount=? WHERE key=?",
-                     (amount, key))
+        conn.execute("UPDATE expense_config SET amount=? "
+                     "WHERE business_id=? AND key=?",
+                     (amount, business_id, key))
     conn.commit()
