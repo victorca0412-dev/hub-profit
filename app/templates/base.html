@@ -9,11 +9,26 @@
 <body>
 <header class="site-header">
   <span class="brand">HubProfit</span>
+  {# One business: just show the name. The switcher would be a dropdown
+     with a single option, which is noise for the majority of users. #}
+  {% if businesses and businesses|length > 1 %}
+  <form method="post" action="/business/switch" class="business-switcher">
+    <select name="business_id" onchange="this.form.submit()">
+      {% for b in businesses %}
+      <option value="{{ b.id }}" {{ 'selected' if b.id == business.id }}>{{ b.name }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-sm btn-ghost">Switch</button></noscript>
+  </form>
+  {% elif business %}
+  <span class="business-name">{{ business.name }}</span>
+  {% endif %}
   <nav class="tabs">
     <a href="/" class="{{ 'on' if active=='dashboard' else '' }}">Dashboard</a>
     <a href="/log" class="{{ 'on' if active=='log' else '' }}">Log Day</a>
     <a href="/history" class="{{ 'on' if active=='history' else '' }}">History</a>
     <a href="/settings" class="{{ 'on' if active=='settings' else '' }}">Settings</a>
+    <a href="/businesses" class="{{ 'on' if active=='businesses' else '' }}">Businesses</a>
     <a href="/help" class="{{ 'on' if active=='help' else '' }}">Help/FAQ</a>
   </nav>
 </header>
