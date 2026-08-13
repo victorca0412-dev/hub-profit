@@ -6,6 +6,8 @@
 {# Config blob for app.js live estimate #}
 <div id="log-config" hidden
   data-pay-per-package="{{ business.pay_per_package }}"
+  data-rate-model="{{ business.rate_model }}"
+  data-tiers='{{ tiers | tojson }}'
   data-vehicle-mpg="{{ settings.vehicle_mpg }}"
   data-gas-price="{{ settings.gas_price_per_gal }}"
   data-fuel-enabled="{{ '1' if expense_config.get('fuel', {}).get('enabled') else '0' }}">
@@ -103,6 +105,10 @@
       <div class="estimate-row">
         <span>Earnings</span>
         <span id="est-earnings" class="val-pos">$0.00</span>
+      </div>
+      <div class="estimate-row estimate-sub">
+        <span id="est-rate-note" class="text-muted"></span>
+        <span></span>
       </div>
       <div class="estimate-row" id="est-fuel-line">
         <span>Fuel cost (est.)</span>

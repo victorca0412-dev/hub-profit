@@ -28,6 +28,45 @@
         {% if errors.pay_per_package %}<p class="field-error">{{ errors.pay_per_package }}</p>{% endif %}
       </div>
     </div>
+
+    <div class="field">
+      <label class="check-label">
+        <input type="radio" name="rate_model" value="flat"
+               {{ 'checked' if business.rate_model != 'tiered' }}>
+        Flat rate per package
+      </label>
+      <label class="check-label">
+        <input type="radio" name="rate_model" value="tiered"
+               {{ 'checked' if business.rate_model == 'tiered' }}>
+        Fluctuating &mdash; the rate depends on the day's package count
+      </label>
+    </div>
+
+    <div class="tier-editor" id="tier-editor"
+         {{ 'hidden' if business.rate_model != 'tiered' }}>
+      <p class="hint">
+        The day's total package count picks one tier, and every package that day
+        pays that tier's rate. Smaller blocks usually pay more per package.
+      </p>
+      {% if errors.tiers %}<p class="field-error">{{ errors.tiers }}</p>{% endif %}
+      <table class="tier-table">
+        <thead><tr><th>From</th><th>To</th><th>Rate</th><th></th></tr></thead>
+        <tbody id="tier-rows">
+          {% for t in tiers %}
+          <tr class="tier-row">
+            <td class="tier-from">{{ t.min_packages }}</td>
+            <td><input type="number" name="tier_to" min="1" step="1"
+                       value="{{ t.max_packages if t.max_packages is not none else '' }}"
+                       placeholder="&#8734;"></td>
+            <td>$ <input type="number" name="tier_rate" min="0" step="0.01"
+                         value="{{ t.rate }}" required></td>
+            <td><button type="button" class="btn btn-sm btn-ghost tier-remove">&times;</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="button" id="tier-add" class="btn btn-sm btn-ghost">+ Add tier</button>
+    </div>
   </div>
 
   {# ── Vehicle & Fuel ── #}

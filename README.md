@@ -16,6 +16,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 - Optional **$/hour** so you know your true hourly rate
 - Optional **multi-driver mode** — add drivers, assign a day to one of them, and charge driver pay only on the days they worked
 - **Multiple Hub accounts** — track more than one business in one instance and switch between them, each with its own rate, expenses, drivers, and history
+- **Fluctuating pay contracts** — if your per-package rate depends on the block size, enter your tiers and HubProfit prices each day at the right one
 - **CSV export** for taxes and record-keeping
 - **Your rates are frozen in history** — change your pay-per-package later and past days stay correct
 - **100% private** — everything runs on your own computer. No account, no cloud, no tracking.

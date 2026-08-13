@@ -582,3 +582,121 @@ class TestManageBusinesses:
         rows = list(csv.DictReader(
             io.StringIO(client.get("/history.csv?period=all").text)))
         assert float(rows[0]["expenses"]) > 0
+
+
+def _all(client, sql, params=()):
+    conn = get_conn(client.db_path)
+    try:
+        return [tuple(r) for r in conn.execute(sql, params)]
+    finally:
+        conn.close()
+
+
+class TestTierEditor:
+    BASE = {"gas_price_per_gal": "3.40", "vehicle_mpg": "25",
+            "pay_per_package": "1.65"}
+    # A flat rate no tier uses, so a tiered result can never be confused
+    # with the fallback. With 1.65 here, 45 packages would earn $74.25
+    # either way and the assertion would prove nothing.
+    DISTINCT_FLAT = "9.99"
+
+    def _save_tiered(self, client, tos, rates):
+        # httpx does NOT accept a list of (key, value) tuples for data= -
+        # it treats the list as raw body content and the server receives
+        # no form fields at all. Repeated keys go in as list values.
+        data = dict(self.BASE)
+        data["pay_per_package"] = self.DISTINCT_FLAT
+        data["rate_model"] = "tiered"
+        data["tier_to"] = list(tos)
+        data["tier_rate"] = list(rates)
+        return client.post("/settings", data=data)
+
+    def test_saving_tiers_stores_chained_bounds(self, client):
+        self._save_tiered(client, ["20", "40", ""], ["2.25", "1.95", "1.65"])
+        rows = _all(client, "SELECT min_packages, max_packages, rate "
+                            "FROM rate_tiers ORDER BY min_packages")
+        assert rows == [(1, 20, 2.25), (21, 40, 1.95), (41, None, 1.65)]
+
+    def test_a_tiered_day_uses_the_tier_rate(self, client):
+        self._save_tiered(client, ["20", "40", ""], ["2.25", "1.95", "1.65"])
+        client.post("/log", data={"date": "2026-08-01", "packages": "45",
+                                  "miles": "0"})
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        # 45 x $1.65 (the 41+ tier). The flat fallback would be 45 x $9.99.
+        assert float(rows[0]["earnings"]) == 74.25
+
+    def test_a_small_block_pays_the_higher_rate(self, client):
+        self._save_tiered(client, ["20", "40", ""], ["2.25", "1.95", "1.65"])
+        client.post("/log", data={"date": "2026-08-01", "packages": "18",
+                                  "miles": "0"})
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        assert float(rows[0]["earnings"]) == 40.50
+
+    def test_switching_back_to_flat_keeps_the_tier_rows(self, client):
+        self._save_tiered(client, ["20", ""], ["2.25", "1.65"])
+        client.post("/settings", data={**self.BASE, "rate_model": "flat"})
+        assert _scalar(client, "SELECT COUNT(*) FROM rate_tiers") == 2
+        # ...but a day logged now prices flat.
+        client.post("/log", data={"date": "2026-08-01", "packages": "10",
+                                  "miles": "0"})
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        assert float(rows[0]["earnings"]) == 16.50
+
+    def test_a_descending_ceiling_is_rejected(self, client):
+        r = self._save_tiered(client, ["40", "20", ""],
+                              ["2.25", "1.95", "1.65"])
+        assert r.status_code == 400
+        assert _scalar(client, "SELECT COUNT(*) FROM rate_tiers") == 0
+
+    def test_a_negative_rate_is_rejected(self, client):
+        r = self._save_tiered(client, ["20", ""], ["-1", "1.65"])
+        assert r.status_code == 400
+        assert _scalar(client, "SELECT COUNT(*) FROM rate_tiers") == 0
+
+    def test_an_open_ended_tier_in_the_middle_is_rejected(self, client):
+        r = self._save_tiered(client, ["", "40", ""],
+                              ["2.25", "1.95", "1.65"])
+        assert r.status_code == 400
+        assert _scalar(client, "SELECT COUNT(*) FROM rate_tiers") == 0
+
+    def test_tiered_with_no_tiers_at_all_is_rejected(self, client):
+        r = client.post("/settings", data={**self.BASE,
+                                           "rate_model": "tiered"})
+        assert r.status_code == 400
+
+    def test_tiers_are_isolated_between_businesses(self, client):
+        self._save_tiered(client, ["20", ""], ["2.25", "1.65"])
+        other = _create_business(client, "Newton Hub")
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert _scalar(
+            client, "SELECT COUNT(*) FROM rate_tiers WHERE business_id=?",
+            (other,)) == 0
+
+    def test_history_and_csv_show_the_effective_rate(self, client):
+        self._save_tiered(client, ["20", "40", ""], ["2.25", "1.95", "1.65"])
+        client.post("/log", data={"date": "2026-08-01", "packages": "45",
+                                  "miles": "0"})
+        client.post("/log", data={"date": "2026-08-02", "packages": "18",
+                                  "miles": "0"})
+        page = client.get("/history?period=all").text
+        assert "$1.65" in page
+        assert "$2.25" in page
+        rows = {r["date"]: r for r in csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text))}
+        assert float(rows["2026-08-01"]["rate"]) == 1.65
+        assert float(rows["2026-08-02"]["rate"]) == 2.25
+
+    def test_the_log_form_carries_the_tiers_for_the_live_estimate(self, client):
+        self._save_tiered(client, ["20", ""], ["2.25", "1.65"])
+        page = client.get("/log").text
+        assert 'data-rate-model="tiered"' in page
+        assert "min_packages" in page
+
+
+def test_flat_businesses_still_show_a_rate_in_history(client):
+    client.post("/log", data={"date": "2026-08-01", "packages": "10",
+                              "miles": "0"})
+    assert "$1.65" in client.get("/history?period=all").text
