@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.db import init_db, get_conn
 from app import settings_repo, entries_repo, drivers_repo, periods, fueleconomy
+from app.validation import parse_date, parse_number, parse_int
 
 DB_PATH = os.environ.get("HUBPROFIT_DB", "data/hub.db")
 Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -57,57 +58,125 @@ def dashboard(request: Request, period: str = "week"):
         "agg": agg, "period": period, "settings": s, "active": "dashboard"})
 
 
+LOG_FIELDS = ("date", "packages", "miles", "hours", "extra_expense",
+              "driver_id", "note")
+
+
+def _log_values(entry=None, form=None):
+    """String values for redisplaying the Log Day form.
+
+    Prefers what the user just submitted, falls back to the entry being
+    edited, then to blank. Keeping this in one place is what lets a
+    rejected form show back exactly what was typed.
+    """
+    values = {k: "" for k in LOG_FIELDS}
+    if entry:
+        for k in LOG_FIELDS:
+            v = entry.get(k)
+            values[k] = "" if v is None else str(v)
+    if form is not None:
+        for k in LOG_FIELDS:
+            if k in form:
+                values[k] = form.get(k) or ""
+    return values
+
+
+def _render_log(request, conn, entry, values, errors, status=200):
+    s = settings_repo.get_settings(conn)
+    cfg = settings_repo.get_expense_config(conn)
+    drivers = drivers_repo.list_drivers(conn, only_active=True)
+    if entry and entry["driver_id"] is not None and \
+            not any(d["id"] == entry["driver_id"] for d in drivers):
+        # Editing must not drop the day's assigned driver just because
+        # they were later deactivated: keep them selectable.
+        assigned = drivers_repo.get_driver(conn, entry["driver_id"])
+        if assigned is not None:
+            drivers.append(assigned)
+    return templates.TemplateResponse(request, "log_day.html", {
+        "settings": s, "expense_config": cfg, "drivers": drivers,
+        "today": date.today().isoformat(), "entry": entry,
+        "values": values, "errors": errors, "active": "log"},
+        status_code=status)
+
+
+def _parse_log_form(form):
+    """Return (data, errors). data is only meaningful when errors is empty."""
+    errors = {}
+    data = {}
+
+    data["date"], err = parse_date(form.get("date"), label="Date")
+    if err:
+        errors["date"] = err
+
+    data["packages"], err = parse_int(form.get("packages"), label="Packages")
+    if err:
+        errors["packages"] = err
+
+    data["miles"], err = parse_number(
+        form.get("miles"), label="Miles", required=False)
+    if err:
+        errors["miles"] = err
+    if data["miles"] is None and not err:
+        data["miles"] = 0.0
+
+    data["hours"], err = parse_number(
+        form.get("hours"), label="Hours", required=False)
+    if err:
+        errors["hours"] = err
+
+    data["extra_expense"], err = parse_number(
+        form.get("extra_expense"), label="Extra expense", required=False)
+    if err:
+        errors["extra_expense"] = err
+
+    data["driver_id"], err = parse_int(
+        form.get("driver_id"), label="Driver", required=False)
+    if err:
+        errors["driver_id"] = err
+
+    data["note"] = (form.get("note") or "").strip() or None
+    return data, errors
+
+
 @app.get("/log")
 def log_form(request: Request, edit: int | None = None):
     with get_db() as conn:
-        s = settings_repo.get_settings(conn)
-        cfg = settings_repo.get_expense_config(conn)
-        drivers = drivers_repo.list_drivers(conn, only_active=True)
         entry = None
         if edit is not None:
             entry = entries_repo.get_entry(conn, edit)
             if entry is None:
                 raise HTTPException(status_code=404, detail="Entry not found")
-            # Editing must not drop the day's assigned driver just because
-            # they were later deactivated: make sure they stay selectable.
-            if entry["driver_id"] is not None and \
-                    not any(d["id"] == entry["driver_id"] for d in drivers):
-                assigned = drivers_repo.get_driver(conn, entry["driver_id"])
-                if assigned is not None:
-                    drivers.append(assigned)
-    return templates.TemplateResponse(request, "log_day.html", {
-        "settings": s, "expense_config": cfg,
-        "drivers": drivers, "today": date.today().isoformat(),
-        "entry": entry, "active": "log"})
+        values = _log_values(entry=entry)
+        if entry is None:
+            values["date"] = date.today().isoformat()
+        return _render_log(request, conn, entry, values, {})
 
 
 @app.post("/log")
-def log_submit(date: str = Form(...), packages: int = Form(...),
-               miles: float = Form(0.0), hours: str = Form(""),
-               extra_expense: str = Form(""), driver_id: str = Form(""),
-               note: str = Form("")):
+async def log_submit(request: Request):
+    form = await request.form()
+    data, errors = _parse_log_form(form)
     with get_db() as conn:
-        entries_repo.create_entry(conn, {
-            "date": date, "packages": packages, "miles": miles,
-            "hours": _f(hours), "extra_expense": _f(extra_expense),
-            "driver_id": int(driver_id) if driver_id else None,
-            "note": note or None})
+        if errors:
+            return _render_log(request, conn, None,
+                               _log_values(form=form), errors, status=400)
+        entries_repo.create_entry(conn, data)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/log/{entry_id}")
-def log_update(entry_id: int, date: str = Form(...), packages: int = Form(...),
-               miles: float = Form(0.0), hours: str = Form(""),
-               extra_expense: str = Form(""), driver_id: str = Form(""),
-               note: str = Form("")):
+async def log_update(request: Request, entry_id: int):
+    form = await request.form()
+    data, errors = _parse_log_form(form)
     with get_db() as conn:
-        ok = entries_repo.update_entry(conn, entry_id, {
-            "date": date, "packages": packages, "miles": miles,
-            "hours": _f(hours), "extra_expense": _f(extra_expense),
-            "driver_id": int(driver_id) if driver_id else None,
-            "note": note or None})
-    if not ok:
-        raise HTTPException(status_code=404, detail="Entry not found")
+        entry = entries_repo.get_entry(conn, entry_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        if errors:
+            return _render_log(request, conn, entry,
+                               _log_values(entry=entry, form=form),
+                               errors, status=400)
+        entries_repo.update_entry(conn, entry_id, data)
     return RedirectResponse("/history", status_code=303)
 
 

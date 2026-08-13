@@ -1,6 +1,12 @@
+import csv
 import importlib
+import io
 from datetime import date
+
+import pytest
 from fastapi.testclient import TestClient
+
+from app.db import get_conn
 
 
 def make_client(tmp_path, monkeypatch):
@@ -8,6 +14,61 @@ def make_client(tmp_path, monkeypatch):
     import app.main as main
     importlib.reload(main)
     return TestClient(main.app)
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    """A TestClient that also carries the path of the DB it is using.
+
+    The raw-table helpers below need it: the Bug C orphan rows are by
+    definition invisible to the repo layer, so asserting they were never
+    written means querying the table directly.
+    """
+    db_path = tmp_path / "smoke.db"
+    monkeypatch.setenv("HUBPROFIT_DB", str(db_path))
+    import app.main as main
+    importlib.reload(main)
+    c = TestClient(main.app)
+    c.db_path = str(db_path)
+    return c
+
+
+def _scalar(client, sql, params=()):
+    conn = get_conn(client.db_path)
+    try:
+        row = conn.execute(sql, params).fetchone()
+        return None if row is None else row[0]
+    finally:
+        conn.close()
+
+
+def _raw_entry_count(client):
+    return _scalar(client, "SELECT COUNT(*) FROM daily_entries")
+
+
+def _first_entry_id(client):
+    return _scalar(client, "SELECT id FROM daily_entries ORDER BY id LIMIT 1")
+
+
+def _entry_date(client, entry_id):
+    return _scalar(client, "SELECT date FROM daily_entries WHERE id=?",
+                   (entry_id,))
+
+
+def _first_driver_id(client):
+    return _scalar(client, "SELECT id FROM drivers ORDER BY id LIMIT 1")
+
+
+def _stored_rate(client):
+    return _scalar(client, "SELECT pay_per_package FROM settings WHERE id=1")
+
+
+def _stored_gas(client):
+    return _scalar(client, "SELECT gas_price_per_gal FROM settings WHERE id=1")
+
+
+def _stored_business_name(client):
+    return _scalar(client, "SELECT business_name FROM settings WHERE id=1")
 
 
 def test_pages_load(tmp_path, monkeypatch):
@@ -217,3 +278,67 @@ def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
     e = get_entry(conn, 1)
     conn.close()
     assert e["driver_id"] == did
+
+
+class TestLogValidation:
+    def test_malformed_date_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "not-a-date", "packages": "10", "miles": "5"})
+        assert r.status_code == 400
+        assert "YYYY-MM-DD" in r.text
+
+    def test_malformed_date_writes_nothing(self, client):
+        client.post("/log", data={
+            "date": "not-a-date", "packages": "10", "miles": "5"})
+        # The orphan bug: such a row is invisible to list_entries, so
+        # assert against the raw table instead.
+        assert _raw_entry_count(client) == 0
+
+    def test_negative_packages_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "-50", "miles": "5"})
+        assert r.status_code == 400
+        assert "negative" in r.text.lower()
+        assert _raw_entry_count(client) == 0
+
+    def test_negative_miles_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "10", "miles": "-5"})
+        assert r.status_code == 400
+        assert _raw_entry_count(client) == 0
+
+    def test_garbage_hours_is_rejected(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "10", "miles": "5",
+            "hours": "abc"})
+        assert r.status_code == 400
+        assert _raw_entry_count(client) == 0
+
+    def test_blank_hours_still_accepted(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "10", "miles": "5",
+            "hours": ""}, follow_redirects=False)
+        assert r.status_code == 303
+
+    def test_rejected_form_redisplays_what_was_typed(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "-50", "miles": "38.5"})
+        assert r.status_code == 400
+        assert "38.5" in r.text
+        assert "2026-08-01" in r.text
+
+    def test_valid_submission_still_works(self, client):
+        r = client.post("/log", data={
+            "date": "2026-08-01", "packages": "47", "miles": "38.5"},
+            follow_redirects=False)
+        assert r.status_code == 303
+        assert _raw_entry_count(client) == 1
+
+    def test_edit_rejects_bad_date_and_leaves_entry_alone(self, client):
+        client.post("/log", data={
+            "date": "2026-08-01", "packages": "47", "miles": "38.5"})
+        entry_id = _first_entry_id(client)
+        r = client.post(f"/log/{entry_id}", data={
+            "date": "nope", "packages": "47", "miles": "38.5"})
+        assert r.status_code == 400
+        assert _entry_date(client, entry_id) == "2026-08-01"
