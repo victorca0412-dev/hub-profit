@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Businesses</h1>
+
+<p class="hint">
+  Each business is its own set of books &mdash; its own pay rate, expenses, drivers,
+  and logged days. Your vehicle, MPG, and gas price are shared across all of them.
+  If two businesses share a cost such as insurance, enter your own split in each
+  one rather than the full amount in both.
+</p>
+
+{% if errors.archive %}<p class="field-error">{{ errors.archive }}</p>{% endif %}
+{% if errors.name %}<p class="field-error">{{ errors.name }}</p>{% endif %}
+
+<div class="card">
+  {% for b in all_businesses %}
+  <div class="business-row {{ 'is-archived' if b.archived }}">
+    <form method="post" action="/businesses/{{ b.id }}/rename">
+      <input type="text" name="name" value="{{ b.name }}" required>
+      <button type="submit" class="btn btn-sm btn-ghost">Rename</button>
+    </form>
+    <span class="text-muted">
+      {{ "Fluctuating" if b.rate_model == 'tiered' else "$%.2f / package"|format(b.pay_per_package) }}
+    </span>
+    <form method="post" action="/businesses/{{ b.id }}/archive">
+      <input type="hidden" name="archived" value="{{ '0' if b.archived else '1' }}">
+      <button type="submit" class="btn btn-sm btn-ghost">
+        {{ "Restore" if b.archived else "Archive" }}
+      </button>
+    </form>
+    {% if b.id == business.id %}<span class="badge">active</span>{% endif %}
+  </div>
+  {% endfor %}
+
+  <form method="post" action="/businesses" class="business-add">
+    <input type="text" name="name" placeholder="New business name" required>
+    <button type="submit" class="btn btn-primary">Add business</button>
+  </form>
+</div>
+
+<p class="hint mt-2">
+  Archiving keeps every day already logged under a business. It only hides it from
+  the switcher. You can restore it at any time.
+</p>
+{% endblock %}

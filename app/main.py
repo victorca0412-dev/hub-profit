@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.db import init_db, get_conn
-from app import settings_repo, entries_repo, drivers_repo, periods, fueleconomy
+from app import (settings_repo, entries_repo, drivers_repo, businesses_repo,
+                 periods, fueleconomy)
 from app.validation import parse_date, parse_number, parse_int
 
 DB_PATH = os.environ.get("HUBPROFIT_DB", "data/hub.db")
@@ -23,6 +24,20 @@ app = FastAPI(title="HubProfit")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
+SETTINGS_NUMBERS = (
+    ("pay_per_package", "Pay per package"),
+    ("gas_price_per_gal", "Gas price per gallon"),
+    ("vehicle_mpg", "Fuel economy (MPG)"),
+)
+EXPENSE_KEYS = ("fuel", "vehicle_wear", "insurance", "phone", "driver")
+EXPENSE_LABELS = {
+    "fuel": "Fuel", "vehicle_wear": "Vehicle wear",
+    "insurance": "Insurance", "phone": "Phone / data",
+    "driver": "Driver pay",
+}
+LOG_FIELDS = ("date", "packages", "miles", "hours", "extra_expense",
+              "driver_id", "note")
+
 
 @contextmanager
 def get_db():
@@ -33,27 +48,62 @@ def get_db():
         conn.close()
 
 
-def _month_counts(conn, entries):
+# ── Active business ──────────────────────────────────────────────────
+
+def _active_business(conn):
+    """The business every request is scoped to.
+
+    Self-healing on purpose: if the stored id points at a business that
+    was archived or removed, fall back to the first active one and
+    persist that. Otherwise a single stale id would 500 every page in the
+    app with no way to fix it from the UI.
+    """
+    business = businesses_repo.get_business(
+        conn, settings_repo.get_active_business_id(conn))
+    if business is None or business["archived"]:
+        active = businesses_repo.list_businesses(conn)
+        if not active:
+            raise HTTPException(status_code=500,
+                                detail="No active business configured")
+        business = active[0]
+        settings_repo.set_active_business(conn, business["id"])
+    return business
+
+
+def _ctx(conn, **extra):
+    """Base template context. Every render merges this in."""
+    business = extra.pop("business", None) or _active_business(conn)
+    ctx = {
+        "business": business,
+        "businesses": businesses_repo.list_businesses(conn),
+        "settings": settings_repo.get_settings(conn),
+    }
+    ctx.update(extra)
+    return ctx
+
+
+def _month_counts(conn, entries, business_id):
     months = {e["date"][:7] for e in entries}
-    return {ym: entries_repo.distinct_workdays_in_month(conn, ym)
+    return {ym: entries_repo.distinct_workdays_in_month(conn, ym, business_id)
             for ym in months}
 
+
+# ── Dashboard ────────────────────────────────────────────────────────
 
 @app.get("/")
 def dashboard(request: Request, period: str = "week"):
     with get_db() as conn:
+        business = _active_business(conn)
         start, end = periods.range_for(period)
-        entries = entries_repo.list_entries(conn, start, end)
-        mdc = _month_counts(conn, entries)
+        entries = entries_repo.list_entries(conn, start, end, business["id"])
+        mdc = _month_counts(conn, entries, business["id"])
         agg = periods.aggregate(entries, month_day_counts=mdc)
-        s = settings_repo.get_settings(conn)
-    return templates.TemplateResponse(request, "dashboard.html", {
-        "agg": agg, "period": period, "settings": s, "active": "dashboard"})
+        return templates.TemplateResponse(request, "dashboard.html", _ctx(
+            conn, business=business, agg=agg, period=period,
+            active="dashboard"))
 
 
-LOG_FIELDS = ("date", "packages", "miles", "hours", "extra_expense",
-              "driver_id", "note")
-
+# ── Log Day ──────────────────────────────────────────────────────────
 
 def _log_values(entry=None, form=None):
     """String values for redisplaying the Log Day form.
@@ -74,22 +124,21 @@ def _log_values(entry=None, form=None):
     return values
 
 
-def _render_log(request, conn, entry, values, errors, status=200):
-    s = settings_repo.get_settings(conn)
-    cfg = settings_repo.get_expense_config(conn)
-    drivers = drivers_repo.list_drivers(conn, only_active=True)
+def _render_log(request, conn, business, entry, values, errors, status=200):
+    cfg = settings_repo.get_expense_config(conn, business["id"])
+    drivers = drivers_repo.list_drivers(conn, business["id"], only_active=True)
     if entry and entry["driver_id"] is not None and \
             not any(d["id"] == entry["driver_id"] for d in drivers):
         # Editing must not drop the day's assigned driver just because
         # they were later deactivated: keep them selectable.
-        assigned = drivers_repo.get_driver(conn, entry["driver_id"])
+        assigned = drivers_repo.get_driver(conn, entry["driver_id"],
+                                           business["id"])
         if assigned is not None:
             drivers.append(assigned)
-    return templates.TemplateResponse(request, "log_day.html", {
-        "settings": s, "expense_config": cfg, "drivers": drivers,
-        "today": date.today().isoformat(), "entry": entry,
-        "values": values, "errors": errors, "active": "log"},
-        status_code=status)
+    return templates.TemplateResponse(request, "log_day.html", _ctx(
+        conn, business=business, expense_config=cfg, drivers=drivers,
+        today=date.today().isoformat(), entry=entry, values=values,
+        errors=errors, active="log"), status_code=status)
 
 
 def _parse_log_form(form):
@@ -134,15 +183,16 @@ def _parse_log_form(form):
 @app.get("/log")
 def log_form(request: Request, edit: int | None = None):
     with get_db() as conn:
+        business = _active_business(conn)
         entry = None
         if edit is not None:
-            entry = entries_repo.get_entry(conn, edit)
+            entry = entries_repo.get_entry(conn, edit, business["id"])
             if entry is None:
                 raise HTTPException(status_code=404, detail="Entry not found")
         values = _log_values(entry=entry)
         if entry is None:
             values["date"] = date.today().isoformat()
-        return _render_log(request, conn, entry, values, {})
+        return _render_log(request, conn, business, entry, values, {})
 
 
 @app.post("/log")
@@ -150,10 +200,11 @@ async def log_submit(request: Request):
     form = await request.form()
     data, errors = _parse_log_form(form)
     with get_db() as conn:
+        business = _active_business(conn)
         if errors:
-            return _render_log(request, conn, None,
+            return _render_log(request, conn, business, None,
                                _log_values(form=form), errors, status=400)
-        entries_repo.create_entry(conn, data)
+        entries_repo.create_entry(conn, data, business["id"])
     return RedirectResponse("/", status_code=303)
 
 
@@ -162,42 +213,49 @@ async def log_update(request: Request, entry_id: int):
     form = await request.form()
     data, errors = _parse_log_form(form)
     with get_db() as conn:
-        entry = entries_repo.get_entry(conn, entry_id)
+        business = _active_business(conn)
+        entry = entries_repo.get_entry(conn, entry_id, business["id"])
         if entry is None:
             raise HTTPException(status_code=404, detail="Entry not found")
         if errors:
-            return _render_log(request, conn, entry,
+            return _render_log(request, conn, business, entry,
                                _log_values(entry=entry, form=form),
                                errors, status=400)
-        entries_repo.update_entry(conn, entry_id, data)
+        entries_repo.update_entry(conn, entry_id, data, business["id"])
     return RedirectResponse("/history", status_code=303)
 
+
+# ── History ──────────────────────────────────────────────────────────
 
 @app.get("/history")
 def history(request: Request, period: str = "all"):
     with get_db() as conn:
+        business = _active_business(conn)
         start, end = periods.range_for(period)
-        entries = entries_repo.list_entries(conn, start, end)
-        mdc = _month_counts(conn, entries)
+        entries = entries_repo.list_entries(conn, start, end, business["id"])
+        mdc = _month_counts(conn, entries, business["id"])
         rows = [{**r["entry"], "computed": r["computed"]}
                 for r in periods.computed_entries(entries, mdc)]
-    return templates.TemplateResponse(request, "history.html", {
-        "rows": rows, "period": period, "active": "history"})
+        return templates.TemplateResponse(request, "history.html", _ctx(
+            conn, business=business, rows=rows, period=period,
+            active="history"))
 
 
 @app.post("/history/delete/{entry_id}")
 def history_delete(entry_id: int):
     with get_db() as conn:
-        entries_repo.delete_entry(conn, entry_id)
+        business = _active_business(conn)
+        entries_repo.delete_entry(conn, entry_id, business["id"])
     return RedirectResponse("/history", status_code=303)
 
 
 @app.get("/history.csv")
 def history_csv(period: str = "all"):
     with get_db() as conn:
+        business = _active_business(conn)
         start, end = periods.range_for(period)
-        entries = entries_repo.list_entries(conn, start, end)
-        mdc = _month_counts(conn, entries)
+        entries = entries_repo.list_entries(conn, start, end, business["id"])
+        mdc = _month_counts(conn, entries, business["id"])
         rows = periods.computed_entries(entries, mdc)
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -214,39 +272,29 @@ def history_csv(period: str = "all"):
         headers={"Content-Disposition": "attachment; filename=hubprofit.csv"})
 
 
-SETTINGS_NUMBERS = (
-    ("pay_per_package", "Pay per package"),
-    ("gas_price_per_gal", "Gas price per gallon"),
-    ("vehicle_mpg", "Fuel economy (MPG)"),
-)
-EXPENSE_KEYS = ("fuel", "vehicle_wear", "insurance", "phone", "driver")
-EXPENSE_LABELS = {
-    "fuel": "Fuel", "vehicle_wear": "Vehicle wear",
-    "insurance": "Insurance", "phone": "Phone / data",
-    "driver": "Driver pay",
-}
+# ── Settings ─────────────────────────────────────────────────────────
 
-
-def _render_settings(request, conn, values, errors, status=200):
+def _stored_settings_values(conn, business):
     s = settings_repo.get_settings(conn)
-    cfg = settings_repo.get_expense_config(conn)
-    drivers = drivers_repo.list_drivers(conn)
-    return templates.TemplateResponse(request, "settings.html", {
-        "settings": s, "expense_config": cfg, "drivers": drivers,
-        "values": values, "errors": errors, "active": "settings"},
-        status_code=status)
+    return {"pay_per_package": str(business["pay_per_package"]),
+            "gas_price_per_gal": str(s["gas_price_per_gal"]),
+            "vehicle_mpg": str(s["vehicle_mpg"])}
 
 
-def _stored_settings_values(conn):
-    s = settings_repo.get_settings(conn)
-    return {k: str(s[k]) for k, _ in SETTINGS_NUMBERS}
+def _render_settings(request, conn, business, values, errors, status=200):
+    cfg = settings_repo.get_expense_config(conn, business["id"])
+    drivers = drivers_repo.list_drivers(conn, business["id"])
+    return templates.TemplateResponse(request, "settings.html", _ctx(
+        conn, business=business, expense_config=cfg, drivers=drivers,
+        values=values, errors=errors, active="settings"), status_code=status)
 
 
 @app.get("/settings")
 def settings_page(request: Request):
     with get_db() as conn:
-        return _render_settings(request, conn,
-                                _stored_settings_values(conn), {})
+        business = _active_business(conn)
+        return _render_settings(request, conn, business,
+                                _stored_settings_values(conn, business), {})
 
 
 @app.post("/settings")
@@ -269,37 +317,48 @@ async def settings_save(request: Request):
         expenses[key] = (bool(form.get(f"exp_{key}_enabled")), amount or 0.0)
 
     with get_db() as conn:
+        business = _active_business(conn)
         if errors:
             # Nothing is written when anything is wrong. A partial save
             # would leave the rate and the costs disagreeing about which
             # submission they came from.
             values = {k: (form.get(k) or "") for k, _ in SETTINGS_NUMBERS}
-            return _render_settings(request, conn, values, errors, status=400)
+            return _render_settings(request, conn, business, values, errors,
+                                    status=400)
         settings_repo.update_settings(conn, {
-            "business_name": form.get("business_name", ""),
             "vehicle_year": form.get("vehicle_year", ""),
             "vehicle_make": form.get("vehicle_make", ""),
             "vehicle_model": form.get("vehicle_model", ""),
             "track_hours": 1 if form.get("track_hours") else 0,
+            "gas_price_per_gal": numbers["gas_price_per_gal"],
+            "vehicle_mpg": numbers["vehicle_mpg"],
+        })
+        businesses_repo.update_business(conn, business["id"], {
+            "name": (form.get("business_name") or "").strip()
+                    or business["name"],
+            "pay_per_package": numbers["pay_per_package"],
             "drivers_enabled": 1 if form.get("drivers_enabled") else 0,
-            **numbers,
         })
         for key, (enabled, amount) in expenses.items():
             settings_repo.update_expense_config(
-                conn, key, enabled=enabled, amount=amount)
+                conn, business["id"], key, enabled=enabled, amount=amount)
     return RedirectResponse("/settings", status_code=303)
 
+
+# ── Drivers ──────────────────────────────────────────────────────────
 
 @app.post("/settings/drivers")
 async def driver_add(request: Request):
     form = await request.form()
     name = (form.get("name") or "").strip()
     with get_db() as conn:
+        business = _active_business(conn)
         if not name:
             return _render_settings(
-                request, conn, _stored_settings_values(conn),
+                request, conn, business,
+                _stored_settings_values(conn, business),
                 {"driver_name": "Driver name is required."}, status=400)
-        drivers_repo.add_driver(conn, name)
+        drivers_repo.add_driver(conn, name, business["id"])
     return RedirectResponse("/settings", status_code=303)
 
 
@@ -308,11 +367,14 @@ async def driver_rename(request: Request, driver_id: int):
     form = await request.form()
     name = (form.get("name") or "").strip()
     with get_db() as conn:
+        business = _active_business(conn)
         if not name:
             return _render_settings(
-                request, conn, _stored_settings_values(conn),
+                request, conn, business,
+                _stored_settings_values(conn, business),
                 {"driver_name": "Driver name is required."}, status=400)
-        if not drivers_repo.rename_driver(conn, driver_id, name):
+        if not drivers_repo.rename_driver(conn, driver_id, name,
+                                          business["id"]):
             raise HTTPException(status_code=404, detail="Driver not found")
     return RedirectResponse("/settings", status_code=303)
 
@@ -321,16 +383,92 @@ async def driver_rename(request: Request, driver_id: int):
 async def driver_set_active(request: Request, driver_id: int):
     form = await request.form()
     with get_db() as conn:
-        if drivers_repo.get_driver(conn, driver_id) is None:
+        business = _active_business(conn)
+        if drivers_repo.get_driver(conn, driver_id, business["id"]) is None:
             raise HTTPException(status_code=404, detail="Driver not found")
         drivers_repo.set_driver_active(
-            conn, driver_id, form.get("active") == "1")
+            conn, driver_id, form.get("active") == "1", business["id"])
     return RedirectResponse("/settings", status_code=303)
 
 
+# ── Businesses ───────────────────────────────────────────────────────
+
+@app.post("/business/switch")
+async def business_switch(request: Request):
+    form = await request.form()
+    business_id, err = parse_int(form.get("business_id"), label="Business")
+    with get_db() as conn:
+        if err or businesses_repo.get_business(conn, business_id) is None:
+            raise HTTPException(status_code=404, detail="Business not found")
+        settings_repo.set_active_business(conn, business_id)
+    back = request.headers.get("referer") or "/"
+    return RedirectResponse(back, status_code=303)
+
+
+def _render_businesses(request, conn, errors, status=200):
+    return templates.TemplateResponse(request, "businesses.html", _ctx(
+        conn, all_businesses=businesses_repo.list_businesses(
+            conn, include_archived=True),
+        errors=errors, active="businesses"), status_code=status)
+
+
+@app.get("/businesses")
+def businesses_page(request: Request):
+    with get_db() as conn:
+        return _render_businesses(request, conn, {})
+
+
+@app.post("/businesses")
+async def business_create(request: Request):
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    with get_db() as conn:
+        if not name:
+            return _render_businesses(
+                request, conn, {"name": "Business name is required."},
+                status=400)
+        # Deliberately does not switch to the new business - the user
+        # switches when they mean to.
+        businesses_repo.create_business(conn, name)
+    return RedirectResponse("/businesses", status_code=303)
+
+
+@app.post("/businesses/{business_id}/rename")
+async def business_rename(request: Request, business_id: int):
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    with get_db() as conn:
+        if not name:
+            return _render_businesses(
+                request, conn, {"name": "Business name is required."},
+                status=400)
+        if not businesses_repo.rename_business(conn, business_id, name):
+            raise HTTPException(status_code=404, detail="Business not found")
+    return RedirectResponse("/businesses", status_code=303)
+
+
+@app.post("/businesses/{business_id}/archive")
+async def business_archive(request: Request, business_id: int):
+    form = await request.form()
+    archived = form.get("archived") == "1"
+    with get_db() as conn:
+        if businesses_repo.get_business(conn, business_id) is None:
+            raise HTTPException(status_code=404, detail="Business not found")
+        try:
+            businesses_repo.set_archived(conn, business_id, archived)
+        except businesses_repo.ActiveBusinessError as exc:
+            return _render_businesses(request, conn, {"archive": str(exc)},
+                                      status=400)
+    return RedirectResponse("/businesses", status_code=303)
+
+
+# ── Help & vehicle API ───────────────────────────────────────────────
+
 @app.get("/help")
 def help_page(request: Request):
-    return templates.TemplateResponse(request, "help.html", {"active": "help"})
+    with get_db() as conn:
+        return templates.TemplateResponse(request, "help.html",
+                                          _ctx(conn, active="help"))
 
 
 @app.get("/api/makes")

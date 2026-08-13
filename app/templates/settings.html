@@ -19,7 +19,7 @@
       <div class="field">
         <label for="business_name">Business name</label>
         <input type="text" id="business_name" name="business_name"
-               value="{{ settings.business_name }}" placeholder="Your business name">
+               value="{{ business.name }}" placeholder="Your business name">
       </div>
       <div class="field">
         <label for="pay_per_package">Pay per package ($)</label>
@@ -123,7 +123,7 @@
       </label>
       <label class="check-label">
         <input type="checkbox" name="drivers_enabled" value="1"
-               {{ 'checked' if settings.drivers_enabled }}>
+               {{ 'checked' if business.drivers_enabled }}>
         Enable multi-driver mode (adds a Driver dropdown to Log Day)
       </label>
     </div>
@@ -141,7 +141,7 @@
 {# ── Drivers ──
    Deliberately outside the settings form: each row is its own form and
    HTML does not allow nested forms. #}
-{% if settings.drivers_enabled %}
+{% if business.drivers_enabled %}
 <div class="card settings-section">
   <div class="settings-section-title">Drivers</div>
   <p class="hint">

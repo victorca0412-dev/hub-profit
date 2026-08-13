@@ -184,26 +184,64 @@ Requirements:
   existing database exactly as it was.
 - **Non-destructive.** No entry is deleted or repriced.
 
-Steps, in order:
+Versioning uses `PRAGMA user_version`, which is stored in the database header and
+available in every SQLite build. Migrating to multiple businesses is version 2;
+tiered contracts (Part 2) will be version 3.
 
-1. Create `businesses` and `rate_tiers`.
-2. If `businesses` is empty and a legacy `settings` row exists, insert business #1
-   with `name` = `settings.business_name` (or `"My Hub Business"` when blank),
+`init_db` always runs `CREATE TABLE IF NOT EXISTS` for the v1 shape and then applies
+migrations. A brand-new database and a migrated one therefore converge on the
+identical schema — there is no second code path whose drift could go unnoticed.
+
+**No `ALTER TABLE ... DROP COLUMN` anywhere.** It requires SQLite 3.35+, and while
+the dev box has 3.50, the container is `python:3.12-slim` and its SQLite version
+cannot be checked from a Windows dev box with no Docker. That is precisely the shape
+of the July timezone bug — an infra assumption that silently no-ops in the container
+while looking applied locally. Tables that need columns removed are rebuilt instead,
+using only `CREATE` / `INSERT ... SELECT` / `DROP` / `RENAME TO`, which every
+relevant SQLite version supports.
+
+Steps for version 2, in order:
+
+1. Create `businesses`.
+2. If `businesses` is empty, insert business #1 from the legacy `settings` row:
+   `name` = `settings.business_name` (or `"My Hub Business"` when blank),
    `pay_per_package` = `settings.pay_per_package`, `rate_model` = `'flat'`,
    `drivers_enabled` = `settings.drivers_enabled`.
-3. Add `business_id` to `expense_config`, `drivers`, `daily_entries`; backfill every
-   existing row to business #1.
-4. Add `snap_rate_model` (default `'flat'`) and `snap_rate_tiers` (nullable) to
-   `daily_entries`. Existing rows get `'flat'` / `NULL`.
-5. Add `active_business_id` to `settings`, set to 1.
-6. Repair Bug C orphans: any `daily_entries.date` that is not a valid ISO date is
-   rewritten to the date portion of that row's `created_at`.
-7. Only after 2 and 3 have verifiably copied the values, drop `business_name`,
-   `pay_per_package`, and `drivers_enabled` from `settings`.
+3. `ALTER TABLE ... ADD COLUMN business_id INTEGER NOT NULL DEFAULT 1` on `drivers`
+   and `daily_entries`. The default backfills every existing row to business #1 in
+   the same statement.
+4. **Rebuild `expense_config`** with the composite primary key `(business_id, key)`,
+   copying existing rows in as business #1.
+5. **Rebuild `settings`** without `business_name`, `pay_per_package`, or
+   `drivers_enabled`, and with `active_business_id` added, defaulting to 1. The copy
+   in step 2 has already happened, so nothing is lost.
+6. Repair Bug C orphans: any `daily_entries.date` not matching
+   `[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]` is rewritten to the date portion of
+   that row's `created_at`. This catches malformed dates, which is the shape the bug
+   actually produced; a format-valid but impossible date such as `2026-02-30` is not
+   detected, and no longer reachable now that Part 0 validates on write.
+7. Set `PRAGMA user_version = 2`.
 
 **Existing entries keep computing off `snap_pay_per_package` with `snap_rate_model =
-'flat'`, exactly as they do today. No historical number changes.** A regression test
-asserts this against a database seeded in the pre-migration schema.
+'flat'`, exactly as they do today. The migration is arithmetically inert.** A
+regression test asserts this against a database seeded in the pre-migration schema.
+
+**One documented exception: repairing a Bug C orphan (step 6) does move numbers, and
+must.** A monthly fixed cost is spread across the days worked that month. An orphan
+was a real day worked that no query could see, so it was excluded from that divisor.
+Making it visible adds a workday, and every day in that month gets a slightly smaller
+share of the monthly cost — each day's net rises accordingly.
+
+Verified: with a $150/month insurance cost and 25 visible July days, repairing one
+orphan into a 26th day moves the insurance share from $6.00 to $5.769 and lifts every
+July day's net by $0.2308.
+
+The alternative — leaving orphans invisible so the arithmetic never moves — means
+permanently under-reporting days worked and silently losing a day's earnings. The
+respread is the correct answer, not a side effect to be suppressed. A test records
+this so it is never "corrected" back.
+
+Databases with no orphan rows, which is nearly all of them, see no change at all.
 
 ### The switcher
 

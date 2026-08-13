@@ -59,16 +59,20 @@ def _first_driver_id(client):
     return _scalar(client, "SELECT id FROM drivers ORDER BY id LIMIT 1")
 
 
-def _stored_rate(client):
-    return _scalar(client, "SELECT pay_per_package FROM settings WHERE id=1")
+def _stored_rate(client, business_id=1):
+    # The rate moved from settings to the business in the v2 migration.
+    return _scalar(client,
+                   "SELECT pay_per_package FROM businesses WHERE id=?",
+                   (business_id,))
 
 
 def _stored_gas(client):
     return _scalar(client, "SELECT gas_price_per_gal FROM settings WHERE id=1")
 
 
-def _stored_business_name(client):
-    return _scalar(client, "SELECT business_name FROM settings WHERE id=1")
+def _stored_business_name(client, business_id=1):
+    return _scalar(client, "SELECT name FROM businesses WHERE id=?",
+                   (business_id,))
 
 
 def test_pages_load(tmp_path, monkeypatch):
@@ -202,7 +206,7 @@ def test_edit_preserves_hours_when_tracking_disabled(tmp_path, monkeypatch):
     from app.db import get_conn
     import os
     conn = get_conn(os.environ["HUBPROFIT_DB"])
-    e = get_entry(conn, 1)
+    e = get_entry(conn, 1, business_id=1)
     conn.close()
     assert e["hours"] == 4.5
     assert e["packages"] == 42
@@ -215,7 +219,7 @@ def test_edit_preserves_driver_when_drivers_disabled(tmp_path, monkeypatch):
     from app.drivers_repo import add_driver
     from app.entries_repo import get_entry
     conn = get_conn(os.environ["HUBPROFIT_DB"])
-    did = add_driver(conn, "Alex")
+    did = add_driver(conn, "Alex", business_id=1)
     conn.close()
     # Log a day assigned to that driver, with drivers enabled.
     client.post("/settings", data={
@@ -239,7 +243,7 @@ def test_edit_preserves_driver_when_drivers_disabled(tmp_path, monkeypatch):
     client.post("/log/1", data={"date": "2026-07-11", "packages": "25",
                                 "miles": "15", "driver_id": str(did)})
     conn = get_conn(os.environ["HUBPROFIT_DB"])
-    e = get_entry(conn, 1)
+    e = get_entry(conn, 1, business_id=1)
     conn.close()
     assert e["driver_id"] == did
     assert e["packages"] == 25
@@ -253,7 +257,7 @@ def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
     from app.drivers_repo import add_driver, set_driver_active
     from app.entries_repo import get_entry
     conn = get_conn(os.environ["HUBPROFIT_DB"])
-    did = add_driver(conn, "Sam")
+    did = add_driver(conn, "Sam", business_id=1)
     conn.close()
     client.post("/settings", data={
         "business_name": "", "pay_per_package": "1.65",
@@ -263,7 +267,7 @@ def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
     client.post("/log", data={"date": "2026-07-12", "packages": "18",
                               "miles": "12", "driver_id": str(did)})
     conn = get_conn(os.environ["HUBPROFIT_DB"])
-    set_driver_active(conn, did, False)
+    set_driver_active(conn, did, False, business_id=1)
     conn.close()
     # The edit form must render the deactivated driver as a selected option,
     # so re-saving keeps them assigned.
@@ -275,7 +279,7 @@ def test_edit_preserves_deactivated_assigned_driver(tmp_path, monkeypatch):
                        follow_redirects=False)
     assert resp.status_code == 303
     conn = get_conn(os.environ["HUBPROFIT_DB"])
-    e = get_entry(conn, 1)
+    e = get_entry(conn, 1, business_id=1)
     conn.close()
     assert e["driver_id"] == did
 
@@ -440,3 +444,141 @@ class TestDriverManagement:
         # 100 pkgs x $1.65 = $165.00 earned on both days.
         assert float(by_date["2026-08-03"]["net"]) == 65.0   # less $100 driver pay
         assert float(by_date["2026-08-04"]["net"]) == 165.0  # drove it myself
+
+
+def _create_business(client, name):
+    client.post("/businesses", data={"name": name})
+    return _scalar(client, "SELECT MAX(id) FROM businesses")
+
+
+class TestBusinessSwitching:
+    def test_switcher_is_hidden_with_only_one_business(self, client):
+        assert "business-switcher" not in client.get("/").text
+
+    def test_switcher_appears_with_two_businesses(self, client):
+        _create_business(client, "Newton Hub")
+        page = client.get("/").text
+        assert "business-switcher" in page
+        assert "Newton Hub" in page
+
+    def test_switching_changes_what_the_dashboard_shows(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/log", data={"date": "2026-08-01", "packages": "100",
+                                  "miles": "0"})
+        assert "100 packages" in client.get("/?period=all").text
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert "0 packages" in client.get("/?period=all").text
+
+    def test_entries_do_not_leak_across_businesses_in_history(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/log", data={"date": "2026-08-01", "packages": "77",
+                                  "miles": "0"})
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert "77" not in client.get("/history?period=all").text
+
+    def test_csv_export_is_scoped_to_the_active_business(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/log", data={"date": "2026-08-01", "packages": "77",
+                                  "miles": "0"})
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert "77" not in client.get("/history.csv?period=all").text
+
+    def test_editing_an_entry_from_another_business_404s(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/log", data={"date": "2026-08-01", "packages": "40",
+                                  "miles": "0"})
+        entry_id = _first_entry_id(client)
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert client.get(f"/log?edit={entry_id}").status_code == 404
+
+    def test_deleting_an_entry_from_another_business_does_nothing(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/log", data={"date": "2026-08-01", "packages": "40",
+                                  "miles": "0"})
+        entry_id = _first_entry_id(client)
+        client.post("/business/switch", data={"business_id": str(other)})
+        client.post(f"/history/delete/{entry_id}")
+        assert _raw_entry_count(client) == 1
+
+    def test_switching_to_an_unknown_business_is_rejected(self, client):
+        assert client.post("/business/switch",
+                           data={"business_id": "999"}).status_code == 404
+
+    def test_the_pay_rate_is_per_business(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/business/switch", data={"business_id": str(other)})
+        client.post("/settings", data={
+            "pay_per_package": "2.25", "gas_price_per_gal": "3.40",
+            "vehicle_mpg": "25"})
+        client.post("/business/switch", data={"business_id": "1"})
+        assert _scalar(
+            client,
+            "SELECT pay_per_package FROM businesses WHERE id=1") == 1.65
+        assert _scalar(
+            client, "SELECT pay_per_package FROM businesses WHERE id=?",
+            (other,)) == 2.25
+
+    def test_gas_price_stays_global_across_businesses(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/settings", data={
+            "pay_per_package": "1.65", "gas_price_per_gal": "4.10",
+            "vehicle_mpg": "25"})
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert 'value="4.1"' in client.get("/settings").text
+
+    def test_an_archived_active_business_falls_back_instead_of_crashing(
+            self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/business/switch", data={"business_id": str(other)})
+        # Archive the business that is currently active, out of band.
+        conn = get_conn(client.db_path)
+        conn.execute("UPDATE businesses SET archived=1 WHERE id=?", (other,))
+        conn.commit()
+        conn.close()
+        assert client.get("/").status_code == 200
+        assert _scalar(
+            client, "SELECT active_business_id FROM settings WHERE id=1") == 1
+
+
+class TestManageBusinesses:
+    def test_page_lists_the_current_business(self, client):
+        assert "My Hub Business" in client.get("/businesses").text
+
+    def test_creating_a_business_does_not_switch_to_it(self, client):
+        client.post("/businesses", data={"name": "Newton Hub"})
+        assert _scalar(
+            client, "SELECT active_business_id FROM settings WHERE id=1") == 1
+
+    def test_a_blank_business_name_is_rejected(self, client):
+        r = client.post("/businesses", data={"name": "   "})
+        assert r.status_code == 400
+        assert _scalar(client, "SELECT COUNT(*) FROM businesses") == 1
+
+    def test_a_business_can_be_renamed(self, client):
+        client.post("/businesses/1/rename", data={"name": "Renamed Co"})
+        assert "Renamed Co" in client.get("/businesses").text
+
+    def test_archiving_hides_it_from_the_switcher(self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post(f"/businesses/{other}/archive", data={"archived": "1"})
+        assert "Newton Hub" not in client.get("/").text
+
+    def test_the_last_business_cannot_be_archived(self, client):
+        r = client.post("/businesses/1/archive", data={"archived": "1"})
+        assert r.status_code == 400
+        assert "only business" in r.text
+        assert _scalar(
+            client, "SELECT archived FROM businesses WHERE id=1") == 0
+
+    def test_a_new_business_starts_with_no_entries_and_default_expenses(
+            self, client):
+        other = _create_business(client, "Newton Hub")
+        client.post("/business/switch", data={"business_id": str(other)})
+        assert "No entries" in client.get("/history?period=all").text
+        # Fuel on by default: a day with miles must show a fuel cost, not
+        # zero expenses.
+        client.post("/log", data={"date": "2026-08-01", "packages": "10",
+                                  "miles": "50"})
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        assert float(rows[0]["expenses"]) > 0

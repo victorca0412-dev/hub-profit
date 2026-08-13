@@ -5,7 +5,7 @@
 
 {# Config blob for app.js live estimate #}
 <div id="log-config" hidden
-  data-pay-per-package="{{ settings.pay_per_package }}"
+  data-pay-per-package="{{ business.pay_per_package }}"
   data-vehicle-mpg="{{ settings.vehicle_mpg }}"
   data-gas-price="{{ settings.gas_price_per_gal }}"
   data-fuel-enabled="{{ '1' if expense_config.get('fuel', {}).get('enabled') else '0' }}">
@@ -73,7 +73,7 @@
         {% if errors.extra_expense %}<p class="field-error">{{ errors.extra_expense }}</p>{% endif %}
       </div>
 
-      {% if settings.drivers_enabled %}
+      {% if business.drivers_enabled %}
       <div class="field">
         <label for="inp-driver">Driver</label>
         <select id="inp-driver" name="driver_id">
