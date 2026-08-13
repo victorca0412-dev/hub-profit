@@ -15,6 +15,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 - Shows **net profit** by day, week, month, and year — with a chart
 - Optional **$/hour** so you know your true hourly rate
 - Optional **multi-driver mode** — add drivers, assign a day to one of them, and charge driver pay only on the days they worked
+- **Multiple Hub accounts** — track more than one business in one instance and switch between them, each with its own rate, expenses, drivers, and history
 - **CSV export** for taxes and record-keeping
 - **Your rates are frozen in history** — change your pay-per-package later and past days stay correct
 - **100% private** — everything runs on your own computer. No account, no cloud, no tracking.
@@ -146,6 +147,12 @@ git pull && docker compose up -d --build
 ```
 
 Your logged data is **not** affected by updates (it lives in the Docker volume, not the code folder).
+
+> **This release upgrades your database.** The upgrade runs automatically the first
+> time the new version starts, and it does not change any day you have already
+> logged. It is safe to run more than once — if it cannot finish, it rolls back and
+> leaves your existing data exactly as it was. As with any upgrade that touches
+> stored data, backing up the `hubprofit_data` volume first is cheap insurance.
 
 ---
 
