@@ -342,3 +342,46 @@ class TestLogValidation:
             "date": "nope", "packages": "47", "miles": "38.5"})
         assert r.status_code == 400
         assert _entry_date(client, entry_id) == "2026-08-01"
+
+
+class TestSettingsValidation:
+    def _save(self, client, follow_redirects=True, **overrides):
+        data = {"business_name": "Test Co", "pay_per_package": "2.50",
+                "gas_price_per_gal": "3.40", "vehicle_mpg": "28"}
+        data.update(overrides)
+        return client.post("/settings", data=data,
+                           follow_redirects=follow_redirects)
+
+    def test_blank_rate_does_not_silently_reset_to_default(self, client):
+        self._save(client, pay_per_package="2.50")
+        r = self._save(client, pay_per_package="")
+        assert r.status_code == 400
+        assert _stored_rate(client) == 2.50
+
+    def test_garbage_rate_is_rejected(self, client):
+        self._save(client, pay_per_package="2.50")
+        r = self._save(client, pay_per_package="abc")
+        assert r.status_code == 400
+        assert _stored_rate(client) == 2.50
+
+    def test_negative_rate_is_rejected(self, client):
+        self._save(client, pay_per_package="2.50")
+        r = self._save(client, pay_per_package="-1")
+        assert r.status_code == 400
+        assert _stored_rate(client) == 2.50
+
+    def test_blank_gas_price_does_not_reset(self, client):
+        self._save(client, gas_price_per_gal="4.10")
+        r = self._save(client, gas_price_per_gal="")
+        assert r.status_code == 400
+        assert _stored_gas(client) == 4.10
+
+    def test_a_rejected_save_writes_no_field_at_all(self, client):
+        self._save(client, business_name="Original", pay_per_package="2.50")
+        self._save(client, business_name="Changed", pay_per_package="")
+        assert _stored_business_name(client) == "Original"
+
+    def test_valid_save_still_works(self, client):
+        r = self._save(client, pay_per_package="1.90", follow_redirects=False)
+        assert r.status_code in (200, 303)
+        assert _stored_rate(client) == 1.90

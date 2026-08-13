@@ -33,13 +33,6 @@ def get_db():
         conn.close()
 
 
-def _f(val, default=None):
-    try:
-        return float(val) if val not in (None, "") else default
-    except (TypeError, ValueError):
-        return default
-
-
 def _month_counts(conn, entries):
     months = {e["date"][:7] for e in entries}
     return {ym: entries_repo.distinct_workdays_in_month(conn, ym)
@@ -221,35 +214,79 @@ def history_csv(period: str = "all"):
         headers={"Content-Disposition": "attachment; filename=hubprofit.csv"})
 
 
+SETTINGS_NUMBERS = (
+    ("pay_per_package", "Pay per package"),
+    ("gas_price_per_gal", "Gas price per gallon"),
+    ("vehicle_mpg", "Fuel economy (MPG)"),
+)
+EXPENSE_KEYS = ("fuel", "vehicle_wear", "insurance", "phone", "driver")
+EXPENSE_LABELS = {
+    "fuel": "Fuel", "vehicle_wear": "Vehicle wear",
+    "insurance": "Insurance", "phone": "Phone / data",
+    "driver": "Driver pay",
+}
+
+
+def _render_settings(request, conn, values, errors, status=200):
+    s = settings_repo.get_settings(conn)
+    cfg = settings_repo.get_expense_config(conn)
+    drivers = drivers_repo.list_drivers(conn)
+    return templates.TemplateResponse(request, "settings.html", {
+        "settings": s, "expense_config": cfg, "drivers": drivers,
+        "values": values, "errors": errors, "active": "settings"},
+        status_code=status)
+
+
+def _stored_settings_values(conn):
+    s = settings_repo.get_settings(conn)
+    return {k: str(s[k]) for k, _ in SETTINGS_NUMBERS}
+
+
 @app.get("/settings")
 def settings_page(request: Request):
     with get_db() as conn:
-        s = settings_repo.get_settings(conn)
-        cfg = settings_repo.get_expense_config(conn)
-    return templates.TemplateResponse(request, "settings.html", {
-        "settings": s, "expense_config": cfg, "active": "settings"})
+        return _render_settings(request, conn,
+                                _stored_settings_values(conn), {})
 
 
 @app.post("/settings")
 async def settings_save(request: Request):
     form = await request.form()
+    errors = {}
+    numbers = {}
+    for key, label in SETTINGS_NUMBERS:
+        numbers[key], err = parse_number(form.get(key), label=label)
+        if err:
+            errors[key] = err
+
+    expenses = {}
+    for key in EXPENSE_KEYS:
+        amount, err = parse_number(
+            form.get(f"exp_{key}_amount"),
+            label=f"{EXPENSE_LABELS[key]} amount", required=False)
+        if err:
+            errors[f"exp_{key}_amount"] = err
+        expenses[key] = (bool(form.get(f"exp_{key}_enabled")), amount or 0.0)
+
     with get_db() as conn:
+        if errors:
+            # Nothing is written when anything is wrong. A partial save
+            # would leave the rate and the costs disagreeing about which
+            # submission they came from.
+            values = {k: (form.get(k) or "") for k, _ in SETTINGS_NUMBERS}
+            return _render_settings(request, conn, values, errors, status=400)
         settings_repo.update_settings(conn, {
             "business_name": form.get("business_name", ""),
-            "pay_per_package": _f(form.get("pay_per_package"), 1.65),
-            "gas_price_per_gal": _f(form.get("gas_price_per_gal"), 3.40),
             "vehicle_year": form.get("vehicle_year", ""),
             "vehicle_make": form.get("vehicle_make", ""),
             "vehicle_model": form.get("vehicle_model", ""),
-            "vehicle_mpg": _f(form.get("vehicle_mpg"), 25.0),
             "track_hours": 1 if form.get("track_hours") else 0,
             "drivers_enabled": 1 if form.get("drivers_enabled") else 0,
+            **numbers,
         })
-        for key in ("fuel", "vehicle_wear", "insurance", "phone", "driver"):
+        for key, (enabled, amount) in expenses.items():
             settings_repo.update_expense_config(
-                conn, key,
-                enabled=bool(form.get(f"exp_{key}_enabled")),
-                amount=_f(form.get(f"exp_{key}_amount"), 0.0))
+                conn, key, enabled=enabled, amount=amount)
     return RedirectResponse("/settings", status_code=303)
 
 
