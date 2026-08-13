@@ -137,6 +137,7 @@ def _render_log(request, conn, business, entry, values, errors, status=200):
             drivers.append(assigned)
     return templates.TemplateResponse(request, "log_day.html", _ctx(
         conn, business=business, expense_config=cfg, drivers=drivers,
+        tiers=businesses_repo.get_tiers(conn, business["id"]),
         today=date.today().isoformat(), entry=entry, values=values,
         errors=errors, active="log"), status_code=status)
 
@@ -259,11 +260,12 @@ def history_csv(period: str = "all"):
         rows = periods.computed_entries(entries, mdc)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["date", "packages", "miles", "hours", "earnings",
+    w.writerow(["date", "packages", "miles", "rate", "hours", "earnings",
                 "expenses", "net", "hourly"])
     for r in sorted(rows, key=lambda x: x["entry"]["date"]):
         e, c = r["entry"], r["computed"]
-        w.writerow([e["date"], e["packages"], e["miles"], e.get("hours") or "",
+        w.writerow([e["date"], e["packages"], e["miles"],
+                    round(c["rate"], 4), e.get("hours") or "",
                     round(c["earnings"], 2), round(c["total_expenses"], 2),
                     round(c["net"], 2),
                     round(c["hourly"], 2) if c["hourly"] is not None else ""])
@@ -284,9 +286,50 @@ def _stored_settings_values(conn, business):
 def _render_settings(request, conn, business, values, errors, status=200):
     cfg = settings_repo.get_expense_config(conn, business["id"])
     drivers = drivers_repo.list_drivers(conn, business["id"])
+    tiers = businesses_repo.get_tiers(conn, business["id"])
     return templates.TemplateResponse(request, "settings.html", _ctx(
         conn, business=business, expense_config=cfg, drivers=drivers,
-        values=values, errors=errors, active="settings"), status_code=status)
+        tiers=tiers, values=values, errors=errors, active="settings"),
+        status_code=status)
+
+
+def _parse_tier_form(form):
+    """Read the repeating tier rows. Returns (tiers, error).
+
+    Lower bounds are not read from the form - the editor derives them and
+    replace_tiers recomputes them - so a gap or overlap cannot be
+    expressed. What still needs checking is that ceilings ascend, rates
+    are sane, and only the final row is unbounded.
+    """
+    tos = form.getlist("tier_to")
+    rates = form.getlist("tier_rate")
+    if not rates:
+        return [], "Add at least one tier, or choose a flat rate."
+
+    tiers = []
+    low = 1
+    for index, raw_rate in enumerate(rates):
+        rate, err = parse_number(raw_rate, label=f"Tier {index + 1} rate")
+        if err:
+            return [], err
+        raw_to = tos[index] if index < len(tos) else ""
+        is_last = index == len(rates) - 1
+        if (raw_to or "").strip() == "":
+            if not is_last:
+                return [], ("Only the last tier can be open-ended. Give "
+                            f"tier {index + 1} an upper limit.")
+            tiers.append((None, rate))
+            break
+        ceiling, err = parse_int(raw_to,
+                                 label=f"Tier {index + 1} upper limit")
+        if err:
+            return [], err
+        if ceiling < low:
+            return [], (f"Tier {index + 1} must end at {low} or higher - "
+                        "each tier has to start above the one before it.")
+        tiers.append((ceiling, rate))
+        low = ceiling + 1
+    return tiers, None
 
 
 @app.get("/settings")
@@ -316,6 +359,13 @@ async def settings_save(request: Request):
             errors[f"exp_{key}_amount"] = err
         expenses[key] = (bool(form.get(f"exp_{key}_enabled")), amount or 0.0)
 
+    rate_model = "tiered" if form.get("rate_model") == "tiered" else "flat"
+    tiers = []
+    if rate_model == "tiered":
+        tiers, tier_err = _parse_tier_form(form)
+        if tier_err:
+            errors["tiers"] = tier_err
+
     with get_db() as conn:
         business = _active_business(conn)
         if errors:
@@ -338,7 +388,12 @@ async def settings_save(request: Request):
                     or business["name"],
             "pay_per_package": numbers["pay_per_package"],
             "drivers_enabled": 1 if form.get("drivers_enabled") else 0,
+            "rate_model": rate_model,
         })
+        if rate_model == "tiered":
+            # Switching to flat deliberately leaves the rows in place, so
+            # toggling back and forth does not destroy the table.
+            businesses_repo.replace_tiers(conn, business["id"], tiers)
         for key, (enabled, amount) in expenses.items():
             settings_repo.update_expense_config(
                 conn, business["id"], key, enabled=enabled, amount=amount)

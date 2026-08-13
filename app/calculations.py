@@ -33,8 +33,40 @@ def _expense_cost(key, cfg, entry, days_worked_in_month, entries_on_date):
     return 0.0
 
 
+def _rate_from_tiers(packages, tiers):
+    """Whole-block lookup: the count picks one tier, all packages pay it.
+
+    Deliberately NOT graduated brackets. On tiers 1-20/21-40/41+ at
+    $2.25/$1.95/$1.65 a 45-package day earns 45 x $1.65 = $74.25, not
+    $92.25. Amazon's block offers priced the whole block by its size,
+    which is why smaller blocks paid more per package.
+    """
+    for tier in tiers or []:
+        low = tier["min_packages"]
+        high = tier["max_packages"]
+        if packages >= low and (high is None or packages <= high):
+            return tier["rate"]
+    return None
+
+
+def rate_for_entry(entry):
+    """The per-package rate this entry actually pays."""
+    if entry.get("snap_rate_model") == "tiered":
+        rate = _rate_from_tiers(entry["packages"],
+                                entry.get("snap_rate_tiers"))
+        if rate is not None:
+            return rate
+        # A malformed or empty tier table must not zero out a real day's
+        # earnings. Every entry carries a flat rate to fall back on.
+    return entry["snap_pay_per_package"]
+
+
+def earnings_for(entry):
+    return entry["packages"] * rate_for_entry(entry)
+
+
 def compute_entry(entry, days_worked_in_month, entries_on_date=1):
-    earnings = entry["packages"] * entry["snap_pay_per_package"]
+    earnings = earnings_for(entry)
     expenses = {}
     for key, cfg in entry["snap_expense_config"].items():
         if not cfg.get("enabled"):
@@ -51,6 +83,7 @@ def compute_entry(entry, days_worked_in_month, entries_on_date=1):
     hourly = (net / hours) if hours else None
     return {
         "earnings": earnings,
+        "rate": rate_for_entry(entry),
         "expenses": expenses,
         "extra_expense": extra,
         "total_expenses": total_expenses,

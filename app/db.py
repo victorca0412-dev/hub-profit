@@ -1,6 +1,6 @@
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # The v1 base shape. Always applied with IF NOT EXISTS, then brought up to
 # SCHEMA_VERSION by migrate(). A fresh database and a migrated one therefore
@@ -181,7 +181,27 @@ def _migrate_to_v2(conn):
                  "ON daily_entries(business_id, date)")
 
 
-MIGRATIONS = {2: _migrate_to_v2}
+def _migrate_to_v3(conn):
+    """Flat rates -> optional per-business fluctuating contracts."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS rate_tiers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL,
+            min_packages INTEGER NOT NULL,
+            max_packages INTEGER,
+            rate REAL NOT NULL
+        )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tiers_business "
+                 "ON rate_tiers(business_id, min_packages)")
+    # Existing entries are flat and stay flat. snap_rate_tiers is NULL for
+    # them, so earnings keep coming from snap_pay_per_package exactly as
+    # before - the upgrade cannot move a historical number.
+    _add_column(conn, "daily_entries", "snap_rate_model",
+                "TEXT NOT NULL DEFAULT 'flat'")
+    _add_column(conn, "daily_entries", "snap_rate_tiers", "TEXT")
+
+
+MIGRATIONS = {2: _migrate_to_v2, 3: _migrate_to_v3}
 
 
 def migrate(conn):

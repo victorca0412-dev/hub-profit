@@ -88,6 +88,21 @@
     var mpg          = parseFloat(cfg.dataset.vehicleMpg)     || 0;
     var gasPrice     = parseFloat(cfg.dataset.gasPrice)       || 0;
     var fuelEnabled  = cfg.dataset.fuelEnabled === "1";
+    var rateModel    = cfg.dataset.rateModel || "flat";
+    var tiers        = [];
+    try { tiers = JSON.parse(cfg.dataset.tiers || "[]"); } catch (e) { tiers = []; }
+
+    /* Whole-block lookup, mirroring calculations._rate_from_tiers: the
+       day's count picks ONE tier and every package pays that rate. */
+    function rateFor(pkgs) {
+      if (rateModel !== "tiered") return payPerPkg;
+      for (var i = 0; i < tiers.length; i++) {
+        var lo = tiers[i].min_packages;
+        var hi = tiers[i].max_packages;
+        if (pkgs >= lo && (hi === null || pkgs <= hi)) return tiers[i].rate;
+      }
+      return payPerPkg;   // mirrors the server's fallback
+    }
 
     var pkgInput   = document.getElementById("inp-packages");
     var milesInput = document.getElementById("inp-miles");
@@ -103,11 +118,18 @@
       var miles = parseFloat(milesInput && milesInput.value) || 0;
       var extra = parseFloat(extraInput && extraInput.value) || 0;
 
-      var earnings = pkgs * payPerPkg;
+      var rate     = rateFor(pkgs);
+      var earnings = pkgs * rate;
       var fuel     = (fuelEnabled && mpg > 0) ? (miles / mpg * gasPrice) : 0;
       var net      = earnings - fuel - extra;
 
       if (rowEarnings) rowEarnings.textContent = "$" + earnings.toFixed(2);
+      var rateNote = document.getElementById("est-rate-note");
+      if (rateNote) {
+        rateNote.textContent = pkgs
+          ? pkgs + " × $" + rate.toFixed(2)
+          : "";
+      }
       if (fuelLine) {
         fuelLine.style.display = fuelEnabled ? "" : "none";
         if (rowFuel) rowFuel.textContent = "-$" + fuel.toFixed(2);

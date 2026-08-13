@@ -606,3 +606,17 @@ button.btn { font-family: inherit; }
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
 }
+
+/* ── Fluctuating-contract tier editor ── */
+.tier-editor { margin-top: 1rem; }
+.tier-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.tier-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem 0.25rem 0;
+}
+.tier-table td { padding: 0.25rem 0.5rem 0.25rem 0; }
+.tier-table input { width: 100%; max-width: 110px; }
+.tier-from { color: #64748b; white-space: nowrap; }

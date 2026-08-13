@@ -22,6 +22,7 @@
         <th>Date</th>
         <th class="text-right">Pkgs</th>
         <th class="text-right">Miles</th>
+        <th class="text-right">Rate</th>
         <th class="text-right">Earnings</th>
         <th class="text-right">Expenses</th>
         <th class="text-right">Net</th>
@@ -35,6 +36,7 @@
         <td>{{ r.date }}</td>
         <td class="text-right">{{ r.packages }}</td>
         <td class="text-right">{{ "%.1f" | format(r.miles) }}</td>
+        <td class="text-right text-muted">${{ "%.2f" | format(r.computed.rate) }}</td>
         <td class="text-right">${{ "%.2f" | format(r.computed.earnings) }}</td>
         <td class="text-right text-red">${{ "%.2f" | format(r.computed.total_expenses) }}</td>
         <td class="text-right {% if r.computed.net >= 0 %}text-green{% else %}text-red{% endif %}">
