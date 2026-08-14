@@ -58,6 +58,11 @@ volume before upgrading.**
 
 - Rejected forms now redisplay exactly what you typed, with the specific problem
   marked against the offending field, instead of silently discarding the entry.
+- **Static files are now stamped with the app version.** Without this, upgrading
+  left your browser running the previous release's cached JavaScript against the
+  new pages — new markup, old behaviour, no error to tell you. If you have ever
+  upgraded HubProfit and seen something behave oddly until a hard refresh, that
+  was why.
 - The database is now versioned and upgrades automatically on start. Upgrades run
   in a single transaction and roll back completely if anything fails.
 
