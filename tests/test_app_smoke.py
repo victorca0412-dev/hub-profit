@@ -724,3 +724,31 @@ class TestVersionDisplay:
         from app import __version__
         assert client.get("/openapi.json").json()["info"]["version"] == \
             __version__
+
+
+class TestStaticAssetVersioning:
+    """Assets carry ?v=<version> so an upgrade cannot leave a browser
+    running the previous release's cached JavaScript. This bit during
+    development: the tier editor's handlers were live on disk while the
+    page kept executing a stale app.js."""
+
+    def test_scripts_are_version_stamped(self, client):
+        from app import __version__
+        for path in ("/", "/log", "/history", "/settings"):
+            page = client.get(path).text
+            assert f"/static/app.js?v={__version__}" in page, path
+
+    def test_stylesheet_is_version_stamped(self, client):
+        from app import __version__
+        assert f"/static/app.css?v={__version__}" in client.get("/").text
+
+    def test_chart_library_is_version_stamped(self, client):
+        from app import __version__
+        assert f"/static/chart.min.js?v={__version__}" in client.get("/").text
+
+    def test_no_unstamped_asset_references_remain(self, client):
+        for path in ("/", "/log", "/history", "/settings", "/businesses",
+                     "/help"):
+            page = client.get(path).text
+            assert '"/static/app.js"' not in page, path
+            assert '"/static/app.css"' not in page, path
