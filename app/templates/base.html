@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HubProfit</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
 </head>
 <body>
 <header class="site-header">
@@ -36,6 +36,12 @@
 <main class="page">
   {% block content %}{% endblock %}
 </main>
+
+<footer class="site-footer">
+  <a href="https://github.com/victorca0412-dev/hub-profit" target="_blank"
+     rel="noopener">HubProfit</a>
+  v{{ app_version }} &middot; database v{{ db_version }}
+</footer>
 
 {% block scripts %}{% endblock %}
 </body>

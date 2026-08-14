@@ -10,7 +10,8 @@ from fastapi.responses import RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.db import init_db, get_conn
+from app import __version__
+from app.db import init_db, get_conn, SCHEMA_VERSION
 from app import (settings_repo, entries_repo, drivers_repo, businesses_repo,
                  periods, fueleconomy)
 from app.validation import parse_date, parse_number, parse_int
@@ -20,7 +21,7 @@ Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
 init_db(DB_PATH)
 
 BASE_DIR = Path(__file__).parent
-app = FastAPI(title="HubProfit")
+app = FastAPI(title="HubProfit", version=__version__)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
@@ -77,6 +78,11 @@ def _ctx(conn, **extra):
         "business": business,
         "businesses": businesses_repo.list_businesses(conn),
         "settings": settings_repo.get_settings(conn),
+        # Shown in the footer and on Help. The database version matters as
+        # much as the app version when someone reports a problem - it says
+        # whether their migration actually ran.
+        "app_version": __version__,
+        "db_version": SCHEMA_VERSION,
     }
     ctx.update(extra)
     return ctx

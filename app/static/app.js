@@ -325,6 +325,80 @@
   }
 
   /* ─────────────────────────────────────────
+     SETTINGS — fluctuating contract tier editor
+     ───────────────────────────────────────── */
+  function initTierEditor() {
+    var editor = document.getElementById("tier-editor");
+    var tbody  = document.getElementById("tier-rows");
+    var addBtn = document.getElementById("tier-add");
+    if (!editor || !tbody) return;
+
+    var radios = document.querySelectorAll('input[name="rate_model"]');
+
+    function toggleEditor() {
+      var tiered = document.querySelector('input[name="rate_model"]:checked');
+      editor.hidden = !(tiered && tiered.value === "tiered");
+      /* Choosing Fluctuating with no tiers yet would leave an empty table
+         and the save would fail validation, so seed a first row. */
+      if (!editor.hidden && !tbody.querySelectorAll(".tier-row").length) {
+        addRow();
+      }
+    }
+
+    /* The "From" cells are derived, never submitted: the first tier starts
+       at 1 and each next starts one above the previous ceiling. Recomputing
+       them here is what makes a gap or an overlap impossible to express. */
+    function renumber() {
+      var rows = tbody.querySelectorAll(".tier-row");
+      var low = 1;
+      rows.forEach(function (row, i) {
+        row.querySelector(".tier-from").textContent = low;
+        var to = row.querySelector('input[name="tier_to"]');
+        to.placeholder = (i === rows.length - 1) ? "∞" : "e.g. 40";
+        var value = parseInt(to.value, 10);
+        if (!isNaN(value)) low = value + 1;
+      });
+    }
+
+    function addRow() {
+      var row = document.createElement("tr");
+      row.className = "tier-row";
+      row.innerHTML =
+        '<td class="tier-from"></td>' +
+        '<td><input type="number" name="tier_to" min="1" step="1"></td>' +
+        '<td>$ <input type="number" name="tier_rate" min="0" step="0.01" required></td>' +
+        '<td><button type="button" class="btn btn-sm btn-ghost tier-remove">&times;</button></td>';
+      tbody.appendChild(row);
+      renumber();
+      var previous = row.previousElementSibling;
+      if (previous) {
+        /* The row that was last had an open-ended ceiling. Now that it is
+           not last, it needs one - send the user straight there. */
+        var previousTo = previous.querySelector('input[name="tier_to"]');
+        if (!previousTo.value) { previousTo.focus(); return; }
+      }
+      row.querySelector('input[name="tier_rate"]').focus();
+    }
+
+    radios.forEach(function (r) { r.addEventListener("change", toggleEditor); });
+    if (addBtn) addBtn.addEventListener("click", addRow);
+
+    tbody.addEventListener("click", function (e) {
+      if (!e.target.classList.contains("tier-remove")) return;
+      var rows = tbody.querySelectorAll(".tier-row");
+      if (rows.length <= 1) return;   // always keep at least one tier
+      e.target.closest(".tier-row").remove();
+      renumber();
+    });
+
+    tbody.addEventListener("input", function (e) {
+      if (e.target.name === "tier_to") renumber();
+    });
+
+    renumber();
+  }
+
+  /* ─────────────────────────────────────────
      HISTORY — delete confirm
      ───────────────────────────────────────── */
   function initHistory() {
@@ -342,6 +416,7 @@
     initDashboardChart();
     initLogEstimate();
     initSettings();
+    initTierEditor();
     initHistory();
   }
 
