@@ -31,17 +31,21 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 
 ![HubProfit Dashboard](docs/screenshots/dashboard.png)
 
-**Log Day** — quick daily entry with a live earnings & fuel estimate:
+**Log Day** — quick daily entry with a live earnings & fuel estimate that shows the rate being applied:
 
 ![Log a Day](docs/screenshots/log.day.png)
 
-**Settings** — set your rate, pick your vehicle (MPG auto-fills), and toggle the expenses you want counted:
+**History** — every day with the rate it paid, net profit and $/hour, plus one-click CSV export. This account is on a fluctuating contract, so smaller blocks paid $2.25 a package and larger ones $1.65:
+
+![History](docs/screenshots/history.png)
+
+**Settings** — set your rate or enter the tiers of a fluctuating contract, pick your vehicle (MPG auto-fills), and toggle the expenses you want counted:
 
 ![Settings](docs/screenshots/settings.png)
 
-**History** — every day with net profit and $/hour, plus one-click CSV export:
+**Businesses** — running more than one Hub account? Each keeps its own rate, expenses, drivers, and history, and a switcher appears in the header:
 
-![History](docs/screenshots/history.png)
+![Businesses](docs/screenshots/businesses.png)
 
 ---
 
