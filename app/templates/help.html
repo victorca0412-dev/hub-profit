@@ -3,6 +3,24 @@
 {% block content %}
 <h1 class="page-title">Help / FAQ</h1>
 
+<div class="card version-card">
+  <div>
+    You are running <strong>HubProfit v{{ app_version }}</strong>
+    &middot; database schema v{{ db_version }}
+  </div>
+  <div class="hint">
+    Quote both of these if you report a problem &mdash; the database version says
+    whether an upgrade actually finished.
+  </div>
+  <div class="mt-1">
+    <a href="https://github.com/victorca0412-dev/hub-profit/releases"
+       target="_blank" rel="noopener">Latest release</a>
+    &middot;
+    <a href="https://github.com/victorca0412-dev/hub-profit/issues"
+       target="_blank" rel="noopener">Report an issue</a>
+  </div>
+</div>
+
 <div class="card help-content">
 
   <div class="faq-item">

@@ -700,3 +700,27 @@ def test_flat_businesses_still_show_a_rate_in_history(client):
     client.post("/log", data={"date": "2026-08-01", "packages": "10",
                               "miles": "0"})
     assert "$1.65" in client.get("/history?period=all").text
+
+
+class TestVersionDisplay:
+    def test_footer_shows_app_and_database_version(self, client):
+        from app import __version__
+        from app.db import SCHEMA_VERSION
+        page = client.get("/").text
+        assert f"v{__version__}" in page
+        assert f"database v{SCHEMA_VERSION}" in page
+
+    def test_help_page_shows_the_version(self, client):
+        from app import __version__
+        assert f"v{__version__}" in client.get("/help").text
+
+    def test_the_version_is_on_every_page(self, client):
+        from app import __version__
+        for path in ("/", "/log", "/history", "/settings", "/businesses",
+                     "/help"):
+            assert f"v{__version__}" in client.get(path).text, path
+
+    def test_openapi_reports_the_version(self, client):
+        from app import __version__
+        assert client.get("/openapi.json").json()["info"]["version"] == \
+            __version__
