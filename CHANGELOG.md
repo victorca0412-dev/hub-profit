@@ -18,6 +18,9 @@ before 2026-08-13, you are on that unversioned code — see the upgrade note bel
   per-package or a per-day amount, instead of one flat per-day figure shared by
   everyone. Sub-contracted delivery pays the driver out of your per-package rate,
   and this models that.
+- **Check for updates.** A button on Help/FAQ asks GitHub whether a newer release
+  exists. It only runs when you click it — HubProfit never checks on its own, and
+  it works normally on a machine with no internet at all.
 - **Your margin on driver days.** Log Day shows what you earn, what the driver
   costs, and what you keep — and says plainly when a block loses money at that
   driver's rate.

@@ -806,3 +806,47 @@ class TestLogDayWithDriver:
             io.StringIO(client.get("/history.csv?period=all").text)))
         # 45 x $1.65 earned = $74.25, 45 x $1.90 paid = $85.50.
         assert float(rows[0]["net"]) < 0
+
+
+class TestUpdateCheck:
+    def test_help_page_offers_the_button(self, client):
+        page = client.get("/help").text
+        assert "update-check-btn" in page
+        assert "Check for updates" in page
+
+    def test_help_page_states_the_privacy_position(self, client):
+        page = client.get("/help").text
+        assert "only contacts the internet when you ask" in page
+
+    def test_the_endpoint_reports_up_to_date(self, client, monkeypatch):
+        from app import updates
+        from app import __version__
+        monkeypatch.setattr(updates, "_fetch_latest_tag",
+                            lambda: "v" + __version__)
+        d = client.get("/api/update-check").json()
+        assert d["status"] == "up-to-date"
+        assert d["current"] == __version__
+
+    def test_the_endpoint_reports_an_update(self, client, monkeypatch):
+        from app import updates
+        monkeypatch.setattr(updates, "_fetch_latest_tag", lambda: "v99.0.0")
+        d = client.get("/api/update-check").json()
+        assert d["status"] == "update-available"
+        assert d["latest"] == "99.0.0"
+
+    def test_the_endpoint_survives_no_internet(self, client, monkeypatch):
+        from app import updates
+
+        def boom():
+            raise OSError("no route to host")
+        monkeypatch.setattr(updates, "_fetch_latest_tag", boom)
+        r = client.get("/api/update-check")
+        # Still a 200 with a usable message - an offline machine must not
+        # see an error page.
+        assert r.status_code == 200
+        assert r.json()["status"] == "unavailable"
+
+    def test_no_other_page_calls_the_update_endpoint(self, client):
+        # The check must never fire on its own.
+        for path in ("/", "/log", "/history", "/settings", "/businesses"):
+            assert "api/update-check" not in client.get(path).text

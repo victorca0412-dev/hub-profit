@@ -21,7 +21,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 - **Fluctuating pay contracts** — if your per-package rate depends on the block size, enter your tiers and HubProfit prices each day at the right one
 - **CSV export** for taxes and record-keeping
 - **Your rates are frozen in history** — change your pay-per-package later and past days stay correct
-- **100% private** — everything runs on your own computer. No account, no cloud, no tracking.
+- **100% private** — everything runs on your own computer. No account, no cloud, no tracking. The only outbound requests are ones you trigger yourself: the MPG lookup and the update check.
 
 ---
 
