@@ -10,6 +10,21 @@ before 2026-08-13, you are on that unversioned code — see the upgrade note bel
 
 ---
 
+## [2.1.1] — 2026-08-14
+
+### Changed
+
+- **Check for updates moved to Settings**, into a Version card alongside the app
+  and database versions. Help/FAQ now points there.
+- **The result is now a labelled box** rather than small grey text beside the
+  button. Previously a successful check read as nothing having happened.
+
+### Fixed
+
+- Driver rows no longer wrap their buttons onto a second line.
+
+---
+
 ## [2.1.0] — 2026-08-14
 
 ### Added

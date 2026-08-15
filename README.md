@@ -4,7 +4,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 
 > **You do not need to be a programmer to run this.** If you can install an app and copy/paste one line, you can run HubProfit. The step-by-step guide below walks you through everything.
 
-**Current version: 2.1.0** — see the [changelog](CHANGELOG.md) for what's new and for upgrade notes. The version you're running is shown in the footer of every page.
+**Current version: 2.1.1** — see the [changelog](CHANGELOG.md) for what's new and for upgrade notes. The version you're running is shown in the footer of every page.
 
 ---
 
