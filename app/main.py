@@ -30,11 +30,10 @@ SETTINGS_NUMBERS = (
     ("gas_price_per_gal", "Gas price per gallon"),
     ("vehicle_mpg", "Fuel economy (MPG)"),
 )
-EXPENSE_KEYS = ("fuel", "vehicle_wear", "insurance", "phone", "driver")
+EXPENSE_KEYS = ("fuel", "vehicle_wear", "insurance", "phone")
 EXPENSE_LABELS = {
     "fuel": "Fuel", "vehicle_wear": "Vehicle wear",
     "insurance": "Insurance", "phone": "Phone / data",
-    "driver": "Driver pay",
 }
 LOG_FIELDS = ("date", "packages", "miles", "hours", "extra_expense",
               "driver_id", "note")
@@ -141,8 +140,12 @@ def _render_log(request, conn, business, entry, values, errors, status=200):
                                            business["id"])
         if assigned is not None:
             drivers.append(assigned)
+    driver_rates = {str(d["id"]): {"name": d["name"],
+                                   "model": d["pay_model"],
+                                   "rate": d["pay_rate"]} for d in drivers}
     return templates.TemplateResponse(request, "log_day.html", _ctx(
         conn, business=business, expense_config=cfg, drivers=drivers,
+        driver_rates=driver_rates,
         tiers=businesses_repo.get_tiers(conn, business["id"]),
         today=date.today().isoformat(), entry=entry, values=values,
         errors=errors, active="log"), status_code=status)
@@ -182,6 +185,11 @@ def _parse_log_form(form):
         form.get("driver_id"), label="Driver", required=False)
     if err:
         errors["driver_id"] = err
+
+    if data.get("driver_id") is not None:
+        # The driver runs their own vehicle; their mileage is not the
+        # owner's cost, so it is not recorded against the owner's day.
+        data["miles"] = 0.0
 
     data["note"] = (form.get("note") or "").strip() or None
     return data, errors
@@ -408,18 +416,52 @@ async def settings_save(request: Request):
 
 # ── Drivers ──────────────────────────────────────────────────────────
 
+DRIVER_PAY_MODELS = ("per_package", "per_day")
+
+
+def _parse_driver_pay(form):
+    """Return (pay_model, pay_rate, error)."""
+    model = form.get("pay_model") or "per_package"
+    if model not in DRIVER_PAY_MODELS:
+        return None, None, "Choose per package or per day."
+    rate, err = parse_number(form.get("pay_rate"), label="Driver pay",
+                             required=False)
+    if err:
+        return None, None, err
+    return model, rate or 0.0, None
+
+
 @app.post("/settings/drivers")
 async def driver_add(request: Request):
     form = await request.form()
     name = (form.get("name") or "").strip()
     with get_db() as conn:
         business = _active_business(conn)
-        if not name:
+        model, rate, pay_err = _parse_driver_pay(form)
+        if not name or pay_err:
             return _render_settings(
                 request, conn, business,
                 _stored_settings_values(conn, business),
-                {"driver_name": "Driver name is required."}, status=400)
-        drivers_repo.add_driver(conn, name, business["id"])
+                {"driver_name": "Driver name is required." if not name else "",
+                 "driver_pay": pay_err or ""}, status=400)
+        drivers_repo.add_driver(conn, name, business["id"], model, rate)
+    return RedirectResponse("/settings", status_code=303)
+
+
+@app.post("/settings/drivers/{driver_id}/pay")
+async def driver_pay(request: Request, driver_id: int):
+    form = await request.form()
+    model, rate, err = _parse_driver_pay(form)
+    with get_db() as conn:
+        business = _active_business(conn)
+        if err:
+            return _render_settings(
+                request, conn, business,
+                _stored_settings_values(conn, business),
+                {"driver_pay": err}, status=400)
+        if not drivers_repo.update_driver_pay(conn, driver_id,
+                                              business["id"], model, rate):
+            raise HTTPException(status_code=404, detail="Driver not found")
     return RedirectResponse("/settings", status_code=303)
 
 

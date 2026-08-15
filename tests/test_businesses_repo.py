@@ -28,7 +28,7 @@ def test_a_new_business_gets_the_default_expense_rows(conn):
     rows = conn.execute(
         "SELECT key, enabled FROM expense_config WHERE business_id=?",
         (new_id,)).fetchall()
-    assert len(rows) == 5
+    assert len(rows) == 4
     # Fuel on by default, matching what a fresh install gets.
     assert dict((r["key"], r["enabled"]) for r in rows)["fuel"] == 1
 

@@ -8,6 +8,7 @@
   data-pay-per-package="{{ business.pay_per_package }}"
   data-rate-model="{{ business.rate_model }}"
   data-tiers='{{ tiers | tojson }}'
+  data-driver-rates='{{ driver_rates | tojson }}'
   data-vehicle-mpg="{{ settings.vehicle_mpg }}"
   data-gas-price="{{ settings.gas_price_per_gal }}"
   data-fuel-enabled="{{ '1' if expense_config.get('fuel', {}).get('enabled') else '0' }}">
@@ -110,13 +111,21 @@
         <span id="est-rate-note" class="text-muted"></span>
         <span></span>
       </div>
+      <div class="estimate-row" id="est-driver-line" hidden>
+        <span>Driver pay</span>
+        <span id="est-driver" class="val-neg">-$0.00</span>
+      </div>
       <div class="estimate-row" id="est-fuel-line">
         <span>Fuel cost (est.)</span>
         <span id="est-fuel" class="val-neg">-$0.00</span>
       </div>
       <div class="estimate-row net">
-        <span>Net (before fixed costs)</span>
+        <span id="est-net-label">Net (before fixed costs)</span>
         <span id="est-net">$0.00</span>
+      </div>
+      <div class="estimate-row estimate-sub" id="est-margin-note-line" hidden>
+        <span id="est-margin-note" class="text-muted"></span>
+        <span></span>
       </div>
       <p class="hint mt-1">This is an estimate. The server calculates your actual net using all configured expense rules when you save.</p>
     </div>

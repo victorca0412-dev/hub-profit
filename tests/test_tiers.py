@@ -1,6 +1,7 @@
 import pytest
 
 from app import businesses_repo as repo
+from app import db
 from app.db import init_db, get_conn
 
 
@@ -55,8 +56,9 @@ class TestTierStorage:
 
 
 class TestMigrationV3:
-    def test_version_is_three(self, conn):
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    def test_version_is_current(self, conn):
+        assert (conn.execute("PRAGMA user_version").fetchone()[0]
+                == db.SCHEMA_VERSION)
 
     def test_existing_entries_default_to_flat(self, conn):
         from app import entries_repo

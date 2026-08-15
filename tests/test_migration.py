@@ -289,7 +289,7 @@ class TestMigration:
         # logged under it would silently report zero costs.
         assert conn.execute(
             "SELECT COUNT(*) FROM expense_config WHERE business_id=1"
-        ).fetchone()[0] == 5
+        ).fetchone()[0] == 4
         conn.close()
 
     def test_a_failed_migration_leaves_the_database_untouched(self, v1_db,
