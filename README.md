@@ -144,22 +144,38 @@ docker compose up -d
 
 ## Updating
 
-When a new version is out, get the latest and rebuild:
+**You never lose your logged days.** They live in a Docker volume (`hubprofit_data`), separate from the app files — so replacing the code is safe, and there is no need to start over.
 
-- **Easy install (ZIP):** download the new ZIP, unzip it over/next to the old folder, open a terminal there, and run `docker compose up -d --build`.
-- **Advanced install (git):**
+### 1. Get the new version
+
+- **Easy install (ZIP):** download the latest ZIP from the [releases page](https://github.com/victorca0412-dev/hub-profit/releases), unzip it over your existing folder replacing the files, and open a terminal there.
+- **Advanced install (git):** `git pull`
+
+### 2. Rebuild and restart
 
 ```bash
-git pull && docker compose up -d --build
+docker compose up -d --build
 ```
 
-Your logged data is **not** affected by updates (it lives in the Docker volume, not the code folder).
+> ⚠️ **Do not leave off `--build`.** Without it Docker reuses the old image, so you get the new files with the *old* code still running — and the update looks like it did nothing.
 
-> **This release upgrades your database.** The upgrade runs automatically the first
-> time the new version starts, and it does not change any day you have already
-> logged. It is safe to run more than once — if it cannot finish, it rolls back and
-> leaves your existing data exactly as it was. As with any upgrade that touches
-> stored data, backing up the `hubprofit_data` volume first is cheap insurance.
+**Portainer users:** open the stack and choose **Pull and redeploy**. Never tick *Remove volumes* — that is the one action that would destroy your data.
+
+### 3. Confirm it worked
+
+Open **Settings → Version**. It shows the version you are actually running, so you can tell an update apart from one that silently didn't take:
+
+```
+You are running HubProfit v2.1.1 · database schema v4
+```
+
+There is a **Check for updates** button there too, which asks GitHub whether anything newer exists. It only runs when you click it.
+
+### About database upgrades
+
+Some releases change the database. When they do, the upgrade runs automatically the first time the new version starts, in a single transaction, and **does not change any day you have already logged**. It is safe to run more than once, and if it cannot finish it rolls back and leaves your data exactly as it was.
+
+The [changelog](CHANGELOG.md) says which releases carry one. Backing up the `hubprofit_data` volume beforehand is cheap insurance either way — see [Your data](#your-data).
 
 ---
 

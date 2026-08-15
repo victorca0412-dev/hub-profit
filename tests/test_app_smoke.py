@@ -863,3 +863,19 @@ class TestUpdateCheck:
         # The check must never fire on its own.
         for path in ("/", "/log", "/history", "/settings", "/businesses"):
             assert "api/update-check" not in client.get(path).text
+
+
+class TestUpdatingDocs:
+    def test_help_explains_how_to_update(self, client):
+        page = client.get("/help").text
+        assert "How do I update" in page
+        assert "docker compose up -d --build" in page
+
+    def test_help_warns_about_the_build_flag(self, client):
+        # Leaving --build off is the failure that looks like success.
+        page = client.get("/help").text
+        assert "Do not leave off" in page
+
+    def test_help_points_at_settings_to_confirm_the_version(self, client):
+        page = client.get("/help").text
+        assert 'href="/settings"' in page
