@@ -809,14 +809,27 @@ class TestLogDayWithDriver:
 
 
 class TestUpdateCheck:
-    def test_help_page_offers_the_button(self, client):
-        page = client.get("/help").text
+    def test_settings_offers_the_button(self, client):
+        page = client.get("/settings").text
         assert "update-check-btn" in page
         assert "Check for updates" in page
 
-    def test_help_page_states_the_privacy_position(self, client):
-        page = client.get("/help").text
+    def test_settings_shows_the_running_version(self, client):
+        from app import __version__
+        from app.db import SCHEMA_VERSION
+        page = client.get("/settings").text
+        assert "HubProfit v%s" % __version__ in page
+        assert "database schema v%d" % SCHEMA_VERSION in page
+
+    def test_settings_states_the_privacy_position(self, client):
+        page = client.get("/settings").text
         assert "only contacts the internet when you ask" in page
+
+    def test_help_no_longer_carries_the_button_but_points_at_settings(
+            self, client):
+        page = client.get("/help").text
+        assert "update-check-btn" not in page
+        assert 'href="/settings"' in page
 
     def test_the_endpoint_reports_up_to_date(self, client, monkeypatch):
         from app import updates

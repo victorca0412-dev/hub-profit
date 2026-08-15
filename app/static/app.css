@@ -630,3 +630,41 @@ button.btn { font-family: inherit; }
 }
 .site-footer a { color: #94a3b8; text-decoration: none; }
 .site-footer a:hover { color: #64748b; text-decoration: underline; }
+
+/* ── Update check ── */
+.update-check {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+.update-result {
+  font-size: 0.9rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  display: none;
+}
+.update-result.is-shown { display: inline-block; }
+.update-result.is-ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+.update-result.is-update {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+.update-result.is-problem {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+.update-result a { color: inherit; font-weight: 600; margin-left: 0.4rem; }
+
+/* Driver rows carry a name, a rate, a model and two buttons; without
+   this the action buttons wrap onto two lines. */
+.driver-row .btn { white-space: nowrap; }
+.driver-row input[type="number"] { max-width: 110px; }
+.driver-add input[type="number"] { max-width: 110px; }

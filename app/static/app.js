@@ -456,30 +456,40 @@
     var out = document.getElementById("update-check-result");
     if (!btn || !out) return;
 
+    /* The result used to render as small grey text beside the button,
+       which read as nothing having happened. It is now a labelled box
+       that is always visible once a check has run. */
+    function show(text, kind, linkUrl) {
+      out.textContent = text;
+      out.className = "update-result is-shown is-" + kind;
+      if (linkUrl) {
+        var a = document.createElement("a");
+        a.href = linkUrl;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "Download";
+        out.appendChild(a);
+      }
+    }
+
     btn.addEventListener("click", function () {
       btn.disabled = true;
-      out.textContent = "Checking…";
-      out.className = "hint";
+      show("Checking…", "problem");
       fetch("/api/update-check")
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          out.textContent = d.message || "";
           if (d.status === "update-available") {
-            out.className = "hint val-neg";
-            var a = document.createElement("a");
-            a.href = d.releases_url;
-            a.target = "_blank";
-            a.rel = "noopener";
-            a.textContent = " Download";
-            out.appendChild(a);
+            show(d.message, "update", d.releases_url);
+          } else if (d.status === "up-to-date") {
+            show(d.message, "ok");
           } else {
-            out.className = "hint";
+            show(d.message, "problem");
           }
         })
         .catch(function () {
           /* The server already turns failures into a message, so this
              only fires if the app itself is unreachable. */
-          out.textContent = "Could not check right now.";
+          show("Could not check right now.", "problem");
         })
         .finally(function () { btn.disabled = false; });
     });
