@@ -4,7 +4,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 
 > **You do not need to be a programmer to run this.** If you can install an app and copy/paste one line, you can run HubProfit. The step-by-step guide below walks you through everything.
 
-**Current version: 2.0.0** — see the [changelog](CHANGELOG.md) for what's new and for upgrade notes. The version you're running is shown in the footer of every page.
+**Current version: 2.1.0** — see the [changelog](CHANGELOG.md) for what's new and for upgrade notes. The version you're running is shown in the footer of every page.
 
 ---
 
@@ -16,7 +16,7 @@ A **free, self-hosted dashboard** that tracks the *real* net profit of your Amaz
 - Spreads **fixed monthly costs** (insurance, phone, etc.) across the days you actually work
 - Shows **net profit** by day, week, month, and year — with a chart
 - Optional **$/hour** so you know your true hourly rate
-- Optional **multi-driver mode** — add drivers, assign a day to one of them, and charge driver pay only on the days they worked
+- Optional **multi-driver mode** — set what you pay each driver, per package or per day, and see the margin you actually keep on their days
 - **Multiple Hub accounts** — track more than one business in one instance and switch between them, each with its own rate, expenses, drivers, and history
 - **Fluctuating pay contracts** — if your per-package rate depends on the block size, enter your tiers and HubProfit prices each day at the right one
 - **CSV export** for taxes and record-keeping

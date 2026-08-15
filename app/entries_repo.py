@@ -28,17 +28,30 @@ def create_entry(conn, data, business_id):
         # Freeze the whole table, not the resolved rate. Storing the rate
         # would pin a 45-package price onto a day later corrected to 38.
         tiers = json.dumps([dict(r) for r in rows]) if rows else None
+    # Freeze the driver's pay too. A raise next month must not reprice
+    # this day, exactly as with the package rate above.
+    driver_id = data.get("driver_id")
+    pay_model = pay_rate = None
+    if driver_id is not None:
+        row = conn.execute(
+            "SELECT pay_model, pay_rate FROM drivers "
+            "WHERE id=? AND business_id=?",
+            (driver_id, business_id)).fetchone()
+        if row is not None:
+            pay_model, pay_rate = row["pay_model"], row["pay_rate"]
     cur = conn.execute(
         """INSERT INTO daily_entries
            (business_id, date, driver_id, packages, miles, hours,
             extra_expense, note, snap_pay_per_package, snap_gas_price,
-            snap_mpg, snap_expense_config, snap_rate_model, snap_rate_tiers)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (business_id, data["date"], data.get("driver_id"), data["packages"],
+            snap_mpg, snap_expense_config, snap_rate_model, snap_rate_tiers,
+            snap_driver_pay_model, snap_driver_pay_rate)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (business_id, data["date"], driver_id, data["packages"],
          data.get("miles", 0.0), data.get("hours"), data.get("extra_expense"),
          data.get("note"), b["pay_per_package"], s["gas_price_per_gal"],
          s["vehicle_mpg"], json.dumps(cfg),
-         b["rate_model"] if tiers else "flat", tiers),
+         b["rate_model"] if tiers else "flat", tiers,
+         pay_model, pay_rate),
     )
     conn.commit()
     return cur.lastrowid

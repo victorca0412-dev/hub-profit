@@ -10,6 +10,40 @@ before 2026-08-13, you are on that unversioned code — see the upgrade note bel
 
 ---
 
+## [2.1.0] — 2026-08-14
+
+### Added
+
+- **Per-driver pay.** Each driver now has their own rate, set as either a
+  per-package or a per-day amount, instead of one flat per-day figure shared by
+  everyone. Sub-contracted delivery pays the driver out of your per-package rate,
+  and this models that.
+- **Your margin on driver days.** Log Day shows what you earn, what the driver
+  costs, and what you keep — and says plainly when a block loses money at that
+  driver's rate.
+
+  This matters most on a fluctuating contract, where larger blocks pay you *less*
+  per package. On tiers of 1–20/21–40/41+ at $2.25/$1.95/$1.65, a driver paid a
+  flat $1.50 earns you $13.50 on an 18-package day and $6.75 on a 45-package one.
+  At $1.70 the larger day loses money outright. None of that was visible before.
+
+### Changed
+
+- **Mileage is no longer recorded or charged on driver days.** Drivers run their
+  own vehicles, so their miles are not your cost. Selecting a driver hides the
+  miles field.
+- **The shared "Driver pay (per day)" expense has been removed** from Settings.
+  Driver pay lives on the driver now. Nothing is lost: multi-driver mode only
+  became usable in 2.0.0, so no logged day can have used it.
+
+### Upgrade notes
+
+- Ships database version 4. It runs automatically, in one transaction, and does
+  not change any day you have already logged.
+- Portainer: **Pull and redeploy**. Never tick *Remove volumes*.
+
+---
+
 ## [2.0.0] — 2026-08-13
 
 The first release that changes the database. **Back up your `hubprofit_data`

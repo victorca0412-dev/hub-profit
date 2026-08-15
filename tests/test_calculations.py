@@ -5,7 +5,6 @@ BASE_CONFIG = {
     "vehicle_wear": {"enabled": False, "mode": "per_mile", "amount": 0.18},
     "insurance": {"enabled": True, "mode": "monthly", "amount": 140.0},
     "phone": {"enabled": True, "mode": "monthly", "amount": 40.0},
-    "driver": {"enabled": False, "mode": "per_day", "amount": 0.0},
 }
 
 
@@ -69,12 +68,13 @@ def test_mpg_zero_safe():
     assert r["expenses"]["fuel"] == 0.0
 
 
-def test_driver_pay_only_when_assigned():
-    cfg = {**BASE_CONFIG, "driver":
-           {"enabled": True, "mode": "per_day", "amount": 50.0}}
-    no_drv = compute_entry(make_entry(snap_expense_config=cfg),
-                           days_worked_in_month=20)
+def test_driver_pay_comes_from_the_entry_not_the_expense_config():
+    # Driver pay moved onto the driver record in 2.1.0 and is frozen
+    # into each entry, so an expense_config "driver" row is ignored.
+    no_drv = compute_entry(make_entry(driver_id=None), 20)
     assert "driver" not in no_drv["expenses"]
-    with_drv = compute_entry(make_entry(snap_expense_config=cfg, driver_id=3),
-                             days_worked_in_month=20)
+    with_drv = compute_entry(
+        make_entry(driver_id=3, packages=40,
+                   snap_driver_pay_model="per_package",
+                   snap_driver_pay_rate=1.25), 20)
     assert with_drv["expenses"]["driver"] == 50.0

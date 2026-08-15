@@ -425,10 +425,11 @@ class TestDriverManagement:
         assert "Alex" not in select
 
     def test_driver_pay_applies_only_on_a_driver_day(self, client):
-        data = dict(self.ENABLE)
-        data.update({"exp_driver_enabled": "1", "exp_driver_amount": "100"})
-        client.post("/settings", data=data)
-        client.post("/settings/drivers", data={"name": "Alex"})
+        # Driver pay moved onto the driver in 2.1.0. A per-day rate of
+        # $100 reproduces the behaviour the old shared expense had.
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={
+            "name": "Alex", "pay_model": "per_day", "pay_rate": "100"})
         driver_id = _first_driver_id(client)
         client.post("/log", data={
             "date": "2026-08-03", "packages": "100", "miles": "0",
@@ -444,6 +445,19 @@ class TestDriverManagement:
         # 100 pkgs x $1.65 = $165.00 earned on both days.
         assert float(by_date["2026-08-03"]["net"]) == 65.0   # less $100 driver pay
         assert float(by_date["2026-08-04"]["net"]) == 165.0  # drove it myself
+
+    def test_per_package_driver_pay_scales_with_the_count(self, client):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={
+            "name": "Alex", "pay_model": "per_package", "pay_rate": "1.00"})
+        driver_id = _first_driver_id(client)
+        client.post("/log", data={
+            "date": "2026-08-03", "packages": "100", "miles": "0",
+            "driver_id": str(driver_id)})
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        # 100 x $1.65 earned, 100 x $1.00 paid out.
+        assert float(rows[0]["net"]) == 65.0
 
 
 def _create_business(client, name):
@@ -752,3 +766,43 @@ class TestStaticAssetVersioning:
             page = client.get(path).text
             assert '"/static/app.js"' not in page, path
             assert '"/static/app.css"' not in page, path
+
+
+class TestLogDayWithDriver:
+    ENABLE = {"business_name": "T", "pay_per_package": "1.65",
+              "gas_price_per_gal": "3.40", "vehicle_mpg": "25",
+              "drivers_enabled": "1"}
+
+    def _driver(self, client, rate="1.50", model="per_package"):
+        client.post("/settings", data=self.ENABLE)
+        client.post("/settings/drivers", data={
+            "name": "Alex", "pay_model": model, "pay_rate": rate})
+        return _first_driver_id(client)
+
+    def test_driver_rates_reach_the_estimate(self, client):
+        self._driver(client)
+        page = client.get("/log").text
+        assert "data-driver-rates" in page
+        assert "Alex" in page
+        assert "1.5" in page
+
+    def test_a_driver_day_stores_zero_miles(self, client):
+        did = self._driver(client)
+        client.post("/log", data={"date": "2026-08-01", "packages": "45",
+                                  "miles": "38", "driver_id": str(did)})
+        assert _scalar(client, "SELECT miles FROM daily_entries") == 0
+
+    def test_an_owner_day_still_stores_miles(self, client):
+        self._driver(client)
+        client.post("/log", data={"date": "2026-08-01", "packages": "45",
+                                  "miles": "38"})
+        assert _scalar(client, "SELECT miles FROM daily_entries") == 38
+
+    def test_a_driver_rate_above_the_owners_shows_a_loss(self, client):
+        did = self._driver(client, rate="1.90")
+        client.post("/log", data={"date": "2026-08-01", "packages": "45",
+                                  "miles": "0", "driver_id": str(did)})
+        rows = list(csv.DictReader(
+            io.StringIO(client.get("/history.csv?period=all").text)))
+        # 45 x $1.65 earned = $74.25, 45 x $1.90 paid = $85.50.
+        assert float(rows[0]["net"]) < 0

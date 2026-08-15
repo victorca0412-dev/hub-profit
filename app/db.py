@@ -1,6 +1,6 @@
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # The v1 base shape. Always applied with IF NOT EXISTS, then brought up to
 # SCHEMA_VERSION by migrate(). A fresh database and a migrated one therefore
@@ -58,7 +58,6 @@ DEFAULT_EXPENSES = [
     ("vehicle_wear", 0, "per_mile", 0.18),
     ("insurance", 0, "monthly", 0.0),
     ("phone", 0, "monthly", 0.0),
-    ("driver", 0, "per_day", 0.0),
 ]
 
 ISO_DATE_GLOB = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
@@ -201,7 +200,24 @@ def _migrate_to_v3(conn):
     _add_column(conn, "daily_entries", "snap_rate_tiers", "TEXT")
 
 
-MIGRATIONS = {2: _migrate_to_v2, 3: _migrate_to_v3}
+def _migrate_to_v4(conn):
+    """Driver pay moves onto the driver, as a per-package or per-day rate.
+
+    The shared expense_config 'driver' row is deleted rather than kept
+    for compatibility. Safe only because multi-driver mode became usable
+    on 2026-08-13 and no driver-assigned entry exists anywhere - verified
+    against the lab before deciding. That window does not reopen.
+    """
+    _add_column(conn, "drivers", "pay_model",
+                "TEXT NOT NULL DEFAULT 'per_package'")
+    _add_column(conn, "drivers", "pay_rate", "REAL NOT NULL DEFAULT 0")
+    # NULL on existing rows: they have no driver, so they cost nothing.
+    _add_column(conn, "daily_entries", "snap_driver_pay_model", "TEXT")
+    _add_column(conn, "daily_entries", "snap_driver_pay_rate", "REAL")
+    conn.execute("DELETE FROM expense_config WHERE key = 'driver'")
+
+
+MIGRATIONS = {2: _migrate_to_v2, 3: _migrate_to_v3, 4: _migrate_to_v4}
 
 
 def migrate(conn):

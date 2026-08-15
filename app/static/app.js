@@ -107,6 +107,17 @@
     var pkgInput   = document.getElementById("inp-packages");
     var milesInput = document.getElementById("inp-miles");
     var extraInput = document.getElementById("inp-extra");
+    var driverSel  = document.getElementById("inp-driver");
+    var milesField = milesInput ? milesInput.closest(".field") : null;
+
+    var driverRates = {};
+    try { driverRates = JSON.parse(cfg.dataset.driverRates || "{}"); }
+    catch (e) { driverRates = {}; }
+
+    function currentDriver() {
+      if (!driverSel || !driverSel.value) return null;
+      return driverRates[driverSel.value] || null;
+    }
 
     var rowEarnings = document.getElementById("est-earnings");
     var rowFuel     = document.getElementById("est-fuel");
@@ -118,10 +129,21 @@
       var miles = parseFloat(milesInput && milesInput.value) || 0;
       var extra = parseFloat(extraInput && extraInput.value) || 0;
 
-      var rate     = rateFor(pkgs);
-      var earnings = pkgs * rate;
-      var fuel     = (fuelEnabled && mpg > 0) ? (miles / mpg * gasPrice) : 0;
-      var net      = earnings - fuel - extra;
+      var driver = currentDriver();
+      /* The driver runs their own vehicle, so their mileage is not the
+         owner's cost - hide the field and drop it from the estimate. */
+      if (milesField) milesField.style.display = driver ? "none" : "";
+      if (driver) miles = 0;
+
+      var rate      = rateFor(pkgs);
+      var earnings  = pkgs * rate;
+      var fuel      = (fuelEnabled && mpg > 0) ? (miles / mpg * gasPrice) : 0;
+      var driverPay = 0;
+      if (driver) {
+        driverPay = driver.model === "per_day"
+          ? driver.rate : pkgs * driver.rate;
+      }
+      var net = earnings - fuel - extra - driverPay;
 
       if (rowEarnings) rowEarnings.textContent = "$" + earnings.toFixed(2);
       var rateNote = document.getElementById("est-rate-note");
@@ -131,16 +153,44 @@
           : "";
       }
       if (fuelLine) {
-        fuelLine.style.display = fuelEnabled ? "" : "none";
+        /* Hidden entirely on driver days: they run their own vehicle, so
+           showing them a -$0.00 fuel line is noise. */
+        fuelLine.style.display = (fuelEnabled && !driver) ? "" : "none";
         if (rowFuel) rowFuel.textContent = "-$" + fuel.toFixed(2);
       }
+      var driverLine = document.getElementById("est-driver-line");
+      var driverCell = document.getElementById("est-driver");
+      var noteLine   = document.getElementById("est-margin-note-line");
+      var noteCell   = document.getElementById("est-margin-note");
+      var netLabel   = document.getElementById("est-net-label");
+
+      if (driverLine) driverLine.hidden = !driver;
+      if (driver && driverCell) {
+        driverCell.textContent = "-$" + driverPay.toFixed(2);
+      }
+      if (netLabel) {
+        netLabel.textContent = driver
+          ? "Your margin" : "Net (before fixed costs)";
+      }
+      if (noteLine && noteCell) {
+        if (driver && pkgs > 0) {
+          noteLine.hidden = false;
+          noteCell.textContent = net < 0
+            ? "This block loses money at " + driver.name + "'s rate"
+            : "$" + (net / pkgs).toFixed(2) + " per package";
+          noteCell.className = net < 0 ? "val-neg" : "text-muted";
+        } else {
+          noteLine.hidden = true;
+        }
+      }
+
       if (rowNet) {
         rowNet.textContent = (net >= 0 ? "$" : "-$") + Math.abs(net).toFixed(2);
         rowNet.className   = net >= 0 ? "val-pos" : "val-neg";
       }
     }
 
-    [pkgInput, milesInput, extraInput].forEach(function (el) {
+    [pkgInput, milesInput, extraInput, driverSel].forEach(function (el) {
       if (el) {
         el.addEventListener("input", update);
         el.addEventListener("change", update);

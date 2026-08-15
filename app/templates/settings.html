@@ -184,12 +184,16 @@
 <div class="card settings-section">
   <div class="settings-section-title">Drivers</div>
   <p class="hint">
-    Days assigned to a driver are charged the &ldquo;Driver pay (per day)&rdquo;
-    expense. Days you drove yourself are not.
+    Set what you pay each driver. Days they work are charged that rate, so your
+    net for the day is what you actually keep. Drivers use their own vehicles, so
+    mileage is not recorded for their days.
   </p>
 
   {% if errors.driver_name %}
   <p class="field-error">{{ errors.driver_name }}</p>
+  {% endif %}
+  {% if errors.driver_pay %}
+  <p class="field-error">{{ errors.driver_pay }}</p>
   {% endif %}
 
   {% for d in drivers %}
@@ -198,6 +202,17 @@
           class="driver-rename">
       <input type="text" name="name" value="{{ d.name }}" required>
       <button type="submit" class="btn btn-sm btn-ghost">Rename</button>
+    </form>
+    <form method="post" action="/settings/drivers/{{ d.id }}/pay"
+          class="driver-pay">
+      <span class="text-muted">$</span>
+      <input type="number" name="pay_rate" min="0" step="0.01"
+             value="{{ d.pay_rate }}">
+      <select name="pay_model">
+        <option value="per_package" {{ 'selected' if d.pay_model == 'per_package' }}>per package</option>
+        <option value="per_day" {{ 'selected' if d.pay_model == 'per_day' }}>per day</option>
+      </select>
+      <button type="submit" class="btn btn-sm btn-ghost">Save pay</button>
     </form>
     <form method="post" action="/settings/drivers/{{ d.id }}/active">
       <input type="hidden" name="active" value="{{ '0' if d.active else '1' }}">
@@ -211,6 +226,13 @@
 
   <form method="post" action="/settings/drivers" class="driver-add">
     <input type="text" name="name" placeholder="New driver name" required>
+    <span class="text-muted">$</span>
+    <input type="number" name="pay_rate" min="0" step="0.01" value="0.00"
+           style="max-width:110px;">
+    <select name="pay_model">
+      <option value="per_package">per package</option>
+      <option value="per_day">per day</option>
+    </select>
     <button type="submit" class="btn btn-ghost">Add driver</button>
   </form>
 </div>

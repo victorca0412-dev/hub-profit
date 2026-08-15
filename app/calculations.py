@@ -7,10 +7,33 @@ snap_expense_config (a dict keyed by expense name).
 """
 
 
+def driver_cost(entry):
+    """What the owner pays their driver for this day.
+
+    Reads the rate frozen into the entry, never the driver's current
+    rate: a raise in March must not reprice January. Correcting a day's
+    package count does move a per-package cost, because the count moved.
+    """
+    if entry.get("driver_id") is None:
+        return 0.0
+    model = entry.get("snap_driver_pay_model")
+    rate = entry.get("snap_driver_pay_rate")
+    if not model or rate is None:
+        return 0.0
+    if model == "per_day":
+        return rate
+    return entry["packages"] * rate
+
+
 def _expense_cost(key, cfg, entry, days_worked_in_month, entries_on_date):
     mode = cfg["mode"]
     amount = cfg["amount"]
     miles = entry["miles"]
+    if mode in ("mileage_fuel", "per_mile") and \
+            entry.get("driver_id") is not None:
+        # The driver runs their own vehicle, so their miles are not the
+        # owner's cost. Charging them here overstates expenses.
+        return None
     if mode == "mileage_fuel":
         mpg = entry["snap_mpg"]
         if mpg <= 0:
@@ -27,8 +50,6 @@ def _expense_cost(key, cfg, entry, days_worked_in_month, entries_on_date):
         per_entry = entries_on_date if entries_on_date > 0 else 1
         return amount / days / per_entry
     if mode == "per_day":
-        if key == "driver" and entry.get("driver_id") is None:
-            return None  # driver pay only applies on driver-assigned days
         return amount
     return 0.0
 
@@ -76,6 +97,11 @@ def compute_entry(entry, days_worked_in_month, entries_on_date=1):
         if cost is None:
             continue
         expenses[key] = cost
+    # Driver pay no longer comes from expense_config - it is per driver
+    # and frozen into the entry.
+    paid_to_driver = driver_cost(entry)
+    if paid_to_driver:
+        expenses["driver"] = paid_to_driver
     extra = entry.get("extra_expense") or 0.0
     total_expenses = sum(expenses.values()) + extra
     net = earnings - total_expenses

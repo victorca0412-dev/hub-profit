@@ -33,4 +33,4 @@ def test_init_db_seeds_settings_and_expenses(tmp_path):
         conn.close()
     assert b["pay_per_package"] == 1.65
     assert s["active_business_id"] == 1
-    assert keys == {"fuel", "vehicle_wear", "insurance", "phone", "driver"}
+    assert keys == {"fuel", "vehicle_wear", "insurance", "phone"}
