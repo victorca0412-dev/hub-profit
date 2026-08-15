@@ -147,6 +147,31 @@
   </div>
 
   <div class="faq-item">
+    <div class="faq-q">How do I update to a new version?</div>
+    <div class="faq-a">
+      <p><strong>You will not lose any logged days.</strong> Your data lives in a Docker
+      volume, separate from the app files, so replacing the code is safe and there is no
+      need to start over.</p>
+      <p>Get the new version &mdash; either download the latest ZIP and unzip it over your
+      existing folder, or run <code>git pull</code> if you installed with git. Then, in a
+      terminal in that folder:</p>
+      <p><code>docker compose up -d --build</code></p>
+      <p><strong>Do not leave off <code>--build</code>.</strong> Without it Docker reuses
+      the old image, so you get the new files with the old code still running and the
+      update looks like it did nothing.</p>
+      <p>On Portainer, use <strong>Pull and redeploy</strong>. Never tick
+      &ldquo;Remove volumes&rdquo; &mdash; that is the one action that would destroy your
+      data.</p>
+      <p>To confirm it worked, open <a href="/settings">Settings</a> and look at the
+      Version card. It shows what you are actually running, which is how you tell a real
+      update from one that silently did not take.</p>
+      <p>Some releases change the database. When they do the upgrade runs by itself on
+      first start, in a single transaction, and does not change any day you have already
+      logged.</p>
+    </div>
+  </div>
+
+  <div class="faq-item">
     <div class="faq-q">Can I track more than one Hub account?</div>
     <div class="faq-a">
       <p>Yes. Open the <strong>Businesses</strong> tab and add one. A switcher then
