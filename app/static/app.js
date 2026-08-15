@@ -449,6 +449,43 @@
   }
 
   /* ─────────────────────────────────────────
+     HELP — manual update check
+     ───────────────────────────────────────── */
+  function initUpdateCheck() {
+    var btn = document.getElementById("update-check-btn");
+    var out = document.getElementById("update-check-result");
+    if (!btn || !out) return;
+
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      out.textContent = "Checking…";
+      out.className = "hint";
+      fetch("/api/update-check")
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          out.textContent = d.message || "";
+          if (d.status === "update-available") {
+            out.className = "hint val-neg";
+            var a = document.createElement("a");
+            a.href = d.releases_url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.textContent = " Download";
+            out.appendChild(a);
+          } else {
+            out.className = "hint";
+          }
+        })
+        .catch(function () {
+          /* The server already turns failures into a message, so this
+             only fires if the app itself is unreachable. */
+          out.textContent = "Could not check right now.";
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+  }
+
+  /* ─────────────────────────────────────────
      HISTORY — delete confirm
      ───────────────────────────────────────── */
   function initHistory() {
@@ -467,6 +504,7 @@
     initLogEstimate();
     initSettings();
     initTierEditor();
+    initUpdateCheck();
     initHistory();
   }
 

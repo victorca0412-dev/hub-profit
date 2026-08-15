@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from app import __version__
 from app.db import init_db, get_conn, SCHEMA_VERSION
 from app import (settings_repo, entries_repo, drivers_repo, businesses_repo,
-                 periods, fueleconomy)
+                 periods, fueleconomy, updates)
 from app.validation import parse_date, parse_number, parse_int
 
 DB_PATH = os.environ.get("HUBPROFIT_DB", "data/hub.db")
@@ -572,6 +572,16 @@ def help_page(request: Request):
     with get_db() as conn:
         return templates.TemplateResponse(request, "help.html",
                                           _ctx(conn, active="help"))
+
+
+@app.get("/api/update-check")
+def api_update_check():
+    """Ask GitHub whether a newer release exists.
+
+    Reached only when the user clicks the button on Help/FAQ. HubProfit
+    does not check on its own - see app/updates.py.
+    """
+    return JSONResponse(updates.check(__version__))
 
 
 @app.get("/api/makes")
